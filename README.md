@@ -215,14 +215,17 @@ cah --config config.toml
 
 ## 六维度组件（§3）
 
+harness 的六个核心维度（决策封装、动作/工具、上下文与记忆、治理护栏、
+反馈闭环、配置）按以下组件落地：
+
 | 维度 | 组件 | 验证要点 |
 |---|---|---|
-| 治理护栏 | `guardrails.py` / `policy.py` / `state.py`（§3.4 §11.2 §11.4） | 护栏先行、ask 无超时放行、自适应升降级 |
-| 安全沙箱 | `sandbox.py`（§11.3） | 超时/截断、docker 隔离；**local 非隔离（见下）** |
-| 记忆 | `memory.py`（§3.3） | 纯标准库 TF-IDF、top-k 注入、收尾整合 |
-| 上下文工程 | `agent.py`（预算/压缩）+ `llm.py`（§3.1 §3.3） | 超预算先压缩、保留最近 N 回合、轮数上限 |
-| 人机协同 HITL | `main.py` / `state.py` / `tools/ask.py`（§11.4） | interrupt→paused、awaiting_user 双来源 |
-| 反馈闭环 | `agent.py`（失败预算）（§3.6） | 连续失败 3 次停止、错误回灌可修正 |
+| 决策封装 | `agent.py` 主循环 + `llm.py`（§3.1） | 组织上下文 → 调用 LLM → 解析要执行的动作 |
+| 动作 / 工具 | `registry.py` + `tools/`（bash/files/search/web/notes/memory/skills/subagent/ask）（§3.2） | 作用于外部世界（读写文件/执行命令/访问网络），结果回灌给 LLM |
+| 上下文与记忆 | `memory.py`（TF-IDF）+ `agent.py`（预算/压缩/多轮历史）（§3.1 §3.3） | 决定向模型提供哪些信息，多轮、跨会话组织与检索 |
+| 治理护栏 | `guardrails.py` / `policy.py` / `state.py` / `sandbox.py`（§3.4 §3.5 §11.2 §11.3 §11.4） | 危险动作执行前拦截，必要时暂停等人审（HITL），用沙箱/边界限制行动空间 |
+| 反馈闭环 | `agent.py`（失败预算/错误回灌）（§3.6） | 让 agent 获得"行为是否正确"的客观信号，据此自我修正 |
+| 配置 | `config.py`（TOML）/ 策略规则（§11.1） | 让使用者通过声明式规则约束 agent 行为（`/rules`、TOML 配置） |
 
 配套能力：工具注册表 `registry.py`、内置工具 `tools/`（bash/files/search/web/
 notes/memory/skills/subagent/ask）、MCP 客户端 `mcp.py`、钩子 `hooks.py`、
