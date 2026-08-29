@@ -17,7 +17,7 @@ MockTransport），已发布至 PyPI。
 ## 目录结构
 
 ```
-Coding-Agent-Harness/
+Coding-Agent/
 ├── harness/                    # 核心包（运行时）
 │   ├── main.py                 # REPL 入口（console script `cah`）
 │   ├── agent.py                # 任务循环：记忆检索 → 迭代 → 收尾整合
@@ -39,8 +39,6 @@ Coding-Agent-Harness/
 │   ├── test_*.py               # 组件单测 + 验收矩阵（§9）+ 安全扫描
 │   ├── fixtures/               # 假 MCP 服务器、技能夹具
 │   └── mechanism_demo/         # 机制演示脚本（demo ①②③，make demo）
-├── scripts/                    # 辅助脚本（如 verify_live_llm.py 真实 LLM 验证）
-├── docs/superpowers/specs/     # 设计规格：SPEC.md / PLAN.md / AGENT_LOG.md
 ├── .github/workflows/          # ci.yml（test+build）/ publish.yml（PyPI 发布）
 ├── Makefile                    # make test / demo / install
 ├── pyproject.toml              # 包定义（[project.scripts] cah）
@@ -87,8 +85,8 @@ Coding-Agent-Harness/
 - **源码分发**（获取最新/参与开发）：
 
   ```bash
-  git clone https://github.com/clementineyyy/Coding-Agent-Harness.git
-  cd Coding-Agent-Harness
+  git clone https://github.com/clementineyyy/Coding-Agent.git
+  cd Coding-Agent
   pip install -e ".[dev]"
   ```
 
@@ -277,7 +275,7 @@ notes/memory/skills/subagent/ask）、MCP 客户端 `mcp.py`、钩子 `hooks.py`
 
 ## 测试
 
-[![CI](https://github.com/clementineyyy/Coding-Agent-Harness/actions/workflows/ci.yml/badge.svg)](https://github.com/clementineyyy/Coding-Agent-Harness/actions/workflows/ci.yml)
+[![CI](https://github.com/clementineyyy/Coding-Agent/actions/workflows/ci.yml/badge.svg)](https://github.com/clementineyyy/Coding-Agent/actions/workflows/ci.yml)
 
 **一键运行**（GitHub Actions CI 与本地使用同一命令）：
 
