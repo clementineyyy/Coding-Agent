@@ -106,5 +106,14 @@ def _run_tool(ctx: Context, name: str, call_args) -> dict:
     except Exception as exc:
         return {"status": "error", "output": f"工具 {name} 异常：{type(exc).__name__}: {exc}"}
     if not isinstance(result, dict):
-        result = {"status": "success", "output": str(result)}
+        # 内置工具 handler 返回的是 ToolResult dataclass 对象，不是 dict。
+        # 必须保留其 status/error，避免把失败误记为成功。
+        if hasattr(result, "status") and hasattr(result, "output"):
+            result = {
+                "status": result.status,
+                "output": (result.output or ""),
+                "error": getattr(result, "error", None),
+            }
+        else:
+            result = {"status": "error", "output": str(result)}
     return result

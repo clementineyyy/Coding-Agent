@@ -144,3 +144,41 @@ def test_subagent_without_dependencies_returns_error(tmp_path):
     ctx = make_ctx(tmp_path)
     r = reg["run_subagent"].handler({"task": "子任务"}, ctx)
     assert r["status"] == "error"
+
+
+def tool_result_tool() -> Tool:
+    """返回 ToolResult 对象（与真实内置工具同一返回类型）的工具。"""
+    from harness.registry import ToolResult
+
+    t = Tool(
+        name="result_tool",
+        description="返回 ToolResult 对象",
+        parameters={"type": "object", "properties": {}, "required": []},
+    )
+
+    def handler(args, ctx):
+        return ToolResult(status="error", error="simulated tool failure")
+
+    t.handler = handler
+    return t
+
+
+def test_subagent_preserves_toolresult_error_status(tmp_path):
+    """真实内置工具返回 ToolResult 对象；子 Agent 必须保留其 error 状态，
+    而不是把对象 repr 包装成 success。"""
+    reg = make_registry([tool_result_tool(), subagent_spec()])
+    llm = RecordingFakeLLM([
+        FakeTurn(tool_calls=[{"name": "result_tool", "arguments": {}}]),
+        FakeTurn(text="仍然完成"),
+    ])
+    ctx = make_ctx(tmp_path, llm=llm, registry=reg)
+    r = reg["run_subagent"].handler({"task": "子任务"}, ctx)
+    assert r["status"] == "success"  # 子 Agent 自身完成
+    assert r["output"] == "仍然完成"
+    # 关键断言：工具调用必须记录为 error（而不是被包装成 success）
+    assert r["tool_calls"][0]["status"] == "error", (
+        f"ToolResult 对象被误包成 success: {r['tool_calls'][0]}"
+    )
+    # 错误信息应回灌给子 LLM（tool 消息中可见 error 状态）
+    tool_msg = [m for m in llm.messages[-1] if m.get("role") == "tool"]
+    assert tool_msg and "error" in tool_msg[0]["content"]
