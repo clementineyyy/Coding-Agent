@@ -1,0 +1,50 @@
+# AGENTS.md — 项目开发强制纪律
+
+本文件由 AI4SE 期末项目通用要求与 Coding Agent Harness 项目要求提炼生成。所有开发会话必须强制执行以下规则。
+
+## 一、流程硬性要求（每项开发都须按序执行）
+
+1. **brainstorming 先行**：任何功能 / 组件 / 行为修改前，必须先调用 brainstorming 技能澄清需求与设计，产出可签名确认的 Spec。禁止跳过讨论直接写代码。
+2. **plan 先行**：设计签字后，调用 writing-plans 技能将设计拆为 task 列表（每 task 2–5 分钟、明确文件路径、明确验证步骤、标出依赖与可并行部分）。保存为 PLAN.md。在 SPEC 与 PLAN 完成并通过冷启动验证之前，禁止编写任何实现代码。
+3. **git worktree 隔离（强制）**：每个独立功能 / 大模块必须在独立 worktree 中开发，对应一个独立分支，完成时通过 PR 合回 main。禁止直接在 main 上开发并推送。worktree 目录统一放在 `.worktrees/<功能名>/`，必须加入 .gitignore。
+4. **TDD 强制**：先写失败测试得到红色结果 → 再写最小实现使其变绿 → 再重构。禁止"先写实现再补测试"。
+5. **Subagent 派发**：每个 task 由新鲜且独立的 subagent 完成。
+6. **两阶段评审**：每个 task 完成后先做 spec 合规检查，再做代码质量检查。Critical issue 必须修复才能进入下一 task。
+7. **完成分支**：所有 task 完成后，用 finishing-a-development-branch 技能决定 merge / PR / 保留 / 丢弃。
+8. **验证后才宣称完成**：提交 / PR 前必须实际运行测试与 CI 命令，报告真实结果，禁止凭预期声称"通过"。
+
+## 二、文档维护（持续更新）
+
+- **PLAN.md**：每完成一个 task 即标记完成，并附 commit hash，持续更新。
+- **AGENT_LOG.md**：按时间顺序记录关键节点。每条包含：时间戳与 task 编号、触发的 Superpowers 技能、关键 prompt / context 配置、subagent 输出的关键片段或 commit hash、人工干预（修改了什么、为什么）、学到的教训。
+- **SPEC_PROCESS.md**：记录 brainstorming 过程、至少 3 轮关键迭代对话与决策、采纳 / 推翻的 AI 建议、以及"陌生 agent 冷启动验证"的结果与对 spec/plan 的修订。
+- **REFLECTION.md**：学期末写反思报告（1500–2500 字），必须由本人撰写。
+
+## 三、凭据安全（必做）
+
+- API key 绝不硬编码进源码、绝不提交进 Git（含历史）、绝不写入日志 / 终端 history / 明文配置文件。
+- key 通过操作系统钥匙串（Windows Credential Manager / keyring）或 .env 文件存储；首次运行引导安全录入（隐藏输入）；可查看 / 更新 / 清除（查看状态不得回显明文）。.env 为明文，须在 SPEC 安全一节说明风险。
+
+## 四、Harness 项目专属纪律（A）
+
+- **机制必须是代码，不能是提示词**：反馈信号 = 校验器 / 传感器（解析产物 → 客观判定 → 回灌）；危险动作拦截 = 护栏代码（识别 → 拦截 → 人工确认），绝不能是系统提示里的一句"注意安全"。
+- **判定标准**：移除真实 LLM、替换为 mock / stub LLM 后，每个核心机制（工具分发、治理拦截、反馈回灌、记忆读写、停机）仍能用确定性单元测试验证。无法脱离 LLM 验证的"机制"不计入实现。
+- 核心机制必须有 mock / stub LLM 的确定性单元测试（不依赖网络与真实 LLM）。
+- 提交机制演示：mock LLM 下确定性复现 ① 护栏拦截危险动作；② 注入失败 → 反馈闭环 → agent 改变下一步；③ 重点维度的确定性行为。
+- 主循环自研，不允许基于现成 agent 编排框架（LangChain AgentExecutor / AutoGen / CrewAI 等）的高层循环。
+
+## 五、测试与 CI
+
+- 一键测试命令（make test 或等价），覆盖核心功能。
+- CI（GitHub Actions）：每次 push 自动运行测试；若选容器分发还须构建镜像。
+- 仓库禁止出现任何真实凭据——提交前自查 .env、history、配置文件。
+
+## 六、提交纪律
+
+- 完整 commit 历史与 PR 工作流：拒绝单次 commit 提交全部代码；每个 worktree 对应一个 PR。
+- commit message / PR 描述标注：由哪个 subagent 完成、人工修改了哪些部分。
+- **双仓库同步（强制）**：本项目同时维护两个仓库——`Coding-Agent-Harness`（完整工程，含 docs/scripts 过程文档）与 `Coding-Agent`（纯净代码交付，无 docs/scripts）。每次代码变更须同步提交推送到两个仓库。
+  - `origin` → `https://github.com/clementineyyy/Coding-Agent-Harness.git`
+  - `coding-agent` → `https://github.com/clementineyyy/Coding-Agent.git`
+  - commit 时间使用**实际提交时刻**（不重建日期）；任何提交都须 push 到两个 remote。
+- 最终交付物：SPEC.md、PLAN.md、SPEC_PROCESS.md、README.md、AGENT_LOG.md、CI 配置、REFLECTION.md、源码（含 mock-LLM 单测与机制演示）。Coding-Agent 仓库不含 docs/scripts（已在历史中剔除并重建日期）。
