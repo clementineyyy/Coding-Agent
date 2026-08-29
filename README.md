@@ -230,20 +230,32 @@ cah --config config.toml
 notes/memory/skills/subagent/ask）、MCP 客户端 `mcp.py`、钩子 `hooks.py`、
 转录 `transcript.py`、凭据 `credentials.py`、LLM 客户端 `llm.py`。
 
-## 沙箱非隔离性声明（重要，§11.3）
+## 沙箱执行策略（重要，§11.3）
 
-**`LocalSandbox`（默认后端）不是安全边界**——它在宿主上直接以子进程执行
-shell 命令，隔离由**护栏**（危险模式 deny / ask）与**路径包含性检查**
-（工作区外路径 deny）承担第一道防线。若需要真正的进程/文件系统隔离，
-请配置 **DockerSandbox** 后端。
+**沙箱执行器 = local 护栏 + Docker 真实隔离，自动接线。**
 
-## Docker 后端（可选，默认 local）
+运行启动时自动探测 Docker：
 
-- 通过配置切换沙箱后端；docker 后端用 `docker run --rm` 执行 bash，默认
-  `--network=none`（无网络），以 `-v <workspace>:/workspace` 挂载工作区，
+- **Docker CLI 与 daemon 可用** → `DockerSandbox` 后端：bash 一律进入
+  `docker run --rm` 容器执行，仅挂载工作区（`-v <workspace>:/workspace`），
   容器内无法破坏宿主文件系统、读不到宿主凭据。
+- **Docker 不可用** → 打印明确提示并**回退 `LocalSandbox`**：护栏
+  （危险模式 deny / ask）与路径包含性检查仍作为第一道防线，但执行发生在
+  宿主（非隔离边界，见下）。
+- 配置用 `sandbox_backend`（`"docker"` 默认 / `"local"`）与 `network_enabled`
+  控制（见 §11.3）。
+
+## 网络策略（§11.3）
+
+- `network_enabled = true`（**默认**）：bash 可联网、`fetch_url` 网页抓取可用。
+- `network_enabled = false`：Docker 后端加 `--network=none` 强制断网；
+  local 后端下网络类工具被拒绝。
+- 危险网络/破坏性命令始终先经护栏（deny/ask）。
+
+## Docker 不可用时
+
+- 自动回退 local 并提示"未检测到 Docker，回退 local 沙箱（护栏仍为第一道防线）"。
 - 镜像默认 `python:3.11-slim`，需预装工具链（python/git 等）。
-- 未安装 Docker 或 daemon 未运行时快速报错，可回退 local。
 - Windows：需 Docker Desktop 并保持运行；挂载路径请使用绝对路径。
 
 ## 安全边界说明
@@ -254,9 +266,9 @@ shell 命令，隔离由**护栏**（危险模式 deny / ask）与**路径包含
 |---|---|
 | 护栏（第一道防线） | 内置 deny 清单拦截**无正当用途的破坏操作**（`rm -rf` 系统根目录、`format`、强删等）；敏感但可能正当的操作走 **ask 审批**（HITL 菜单），批准/拒绝沉淀为策略规则（§11.2） |
 | 路径包含性检查 | 文件类工具对工作区外路径直接 deny（§11.2） |
-| 沙箱（local 默认） | **不是安全边界**：在宿主直接以子进程执行，仅做超时与输出截断（§11.3） |
-| 沙箱（docker 可选） | 真隔离：默认 `--network=none`、仅挂载工作区、容器内读不到宿主凭据与文件系统 |
-| 网络闸门 | 默认关网（`network_enabled=false`）；开启后网络类工具/命令走 ask 审批（§11.3） |
+| 沙箱（local 回退） | **不是安全边界**：宿主直接子进程，仅超时/截断；仅当 Docker 不可用时使用（§11.3） |
+| 沙箱（docker 自动） | 真隔离：仅挂载工作区、容器内读不到宿主凭据与文件系统；`network_enabled=false` 时加 `--network=none` 断网（§11.3） |
+| 网络闸门 | 默认开网（`network_enabled=true`）供网页抓取/联网命令；`false` 时容器断网 / 网络工具拒绝；危险网络命令仍走 ask 审批（§11.3） |
 | 凭据边界 | keyring 加密存储优先，`.env` 明文备选；key **永不写入**日志/转录/记忆/策略；`/key status` 绝不回显明文 |
 | 数据边界 | 转录写工作区 `transcripts/`、记忆写 `memory/`（均被 `.gitignore` 排除）；上下文超预算自动压缩，防溢出 |
 
