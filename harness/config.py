@@ -41,6 +41,8 @@ class Config:
     workspace: Path = field(default_factory=Path.cwd)
     max_output_bytes: int = 51200
     mcp_servers: list[dict] = field(default_factory=list)
+    sandbox_backend: str = "docker"
+    network_enabled: bool = True
 
     @classmethod
     def load(cls, path: Path | None = None, env_file: str = ".env") -> Config:

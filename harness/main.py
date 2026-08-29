@@ -16,7 +16,7 @@ from harness.memory import MemoryStore
 from harness.mcp import load_mcp_servers
 from harness.policy import Policy
 from harness.registry import Tool, make_registry
-from harness.sandbox import LocalSandbox
+from harness.sandbox import DockerSandbox, DockerUnavailableError, LocalSandbox
 from harness.state import StateError, StateMachine
 from harness.tools.ask import spec as ask_spec
 from harness.tools.bash import spec as bash_spec
@@ -40,7 +40,7 @@ def make_agent(config: Config) -> Agent:
             "未配置 DeepSeek API Key：请用 /key set 或环境变量 DEEPSEEK_API_KEY 配置"
         )
     llm = OpenAILLM(api_key=api_key, base_url=config.base_url, model=config.model)
-    sandbox = LocalSandbox(max_output_bytes=config.max_output_bytes)
+    sandbox = _build_sandbox(config)
     hooks = HookBus(transcript_dir=_transcript_dir(config))
     policy = Policy()
     state = StateMachine()
@@ -70,6 +70,42 @@ def make_agent(config: Config) -> Agent:
         config,
         ask_callback=ask_menu,
         on_text=lambda text: print(text),
+    )
+
+
+def _docker_available() -> bool:
+    import shutil
+    import subprocess
+
+    if shutil.which("docker") is None:
+        return False
+    try:
+        r = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return False
+    return r.returncode == 0
+
+
+def _build_sandbox(config: Config):
+    if config.sandbox_backend == "docker" and _docker_available():
+        return DockerSandbox(
+            workspace=config.workspace,
+            network_enabled=config.network_enabled,
+            max_output_bytes=config.max_output_bytes,
+        )
+    if config.sandbox_backend == "docker" and not _docker_available():
+        print(
+            "注意：sandbox_backend=docker 但未检测到 Docker（CLI 缺失）。"
+            "回退到 local 沙箱执行（local 护栏策略仍为第一道防线）。"
+        )
+    return LocalSandbox(
+        network_enabled=config.network_enabled,
+        max_output_bytes=config.max_output_bytes,
     )
 
 
