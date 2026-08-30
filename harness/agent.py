@@ -232,10 +232,11 @@ class Agent:
             result.steps_used += 1
             if not response.tool_calls:
                 final = response.text or "任务完成"
-                self._emit_text(final)
                 messages.append({"role": "assistant", "content": final})
                 result.text = final
-                self._maybe_execute_cold(task, messages, result)
+                executed = self._maybe_execute_cold(task, messages, result)
+                if not executed:
+                    self._emit_text(final)
                 return self._finish(result, messages, max_fail_seq)
             self._emit_text(response.text)
             assistant_call = []
@@ -295,15 +296,15 @@ class Agent:
         self._maybe_execute_cold(task, messages, result)
         return self._finish(result, messages, max_fail_seq)
 
-    def _maybe_execute_cold(self, task: str, messages: list[dict], result: AgentResult) -> None:
+    def _maybe_execute_cold(self, task: str, messages: list[dict], result: AgentResult) -> bool:
         if self._tool_calls:
-            return
+            return False
         from harness.task_executor import TaskExecutor
 
         texts = [m.get("content", "") for m in messages if m.get("role") == "assistant"]
         report = TaskExecutor(self).execute(task, texts)
         if not report.executed:
-            return
+            return False
         self._tool_calls.extend(report.executed)
         result.tool_results.extend(report.results)
         result.executed_by_executor = True
@@ -318,6 +319,7 @@ class Agent:
         self._emit_text(summary)
         messages.append({"role": "assistant", "content": summary})
         result.text = summary
+        return True
 
     def _finish(self, result: AgentResult, messages: list[dict], max_fail_seq: int) -> AgentResult:
         result.messages = messages
