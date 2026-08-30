@@ -46,12 +46,6 @@ def build_system_prompt(config: Config | None = None) -> str:
 
 SYSTEM_PROMPT = build_system_prompt()
 
-_NO_TOOL_NUDGE = (
-    "【工具提示】你还没有调用任何工具。这类任务需要在用户机器上实际执行"
-    "（例如用 bash 查找程序、初始化项目、创建文件）。请立即选择并调用一个工具；"
-    "若你确信确实无需任何工具，请以『无需工具』开头直接给出答案。"
-)
-
 _ASK_OPTIONS = ["y", "n", "always_allow", "never_allow"]
 
 
@@ -59,6 +53,7 @@ _ASK_OPTIONS = ["y", "n", "always_allow", "never_allow"]
 class AgentResult:
     text: str = ""
     steps_used: int = 0
+    executed_by_executor: bool = False
     tool_results: list[dict] = field(default_factory=list)
     policy_changes: list[dict] = field(default_factory=list)
     messages: list[dict] = field(default_factory=list)
@@ -229,7 +224,6 @@ class Agent:
         max_fail_seq = 0
         self._compress_calls = 0
         self._tool_calls = []
-        self._no_tool_nudges = 0
         self.state.fire("task_submitted", "loop")
         while result.steps_used < self.config.max_steps:
             if self._check_budget(messages):
@@ -238,18 +232,10 @@ class Agent:
             result.steps_used += 1
             if not response.tool_calls:
                 final = response.text or "任务完成"
-                if (
-                    self._no_tool_nudges < self.config.tool_use_budget
-                    and not self._tool_calls
-                    and not final.startswith("无需工具")
-                ):
-                    self._no_tool_nudges += 1
-                    messages.append({"role": "assistant", "content": final})
-                    messages.append({"role": "system", "content": _NO_TOOL_NUDGE})
-                    continue
                 self._emit_text(final)
                 messages.append({"role": "assistant", "content": final})
                 result.text = final
+                self._maybe_execute_cold(task, messages, result)
                 return self._finish(result, messages, max_fail_seq)
             self._emit_text(response.text)
             assistant_call = []
@@ -306,7 +292,32 @@ class Agent:
         self._emit_text(final)
         messages.append({"role": "assistant", "content": final})
         result.text = final
+        self._maybe_execute_cold(task, messages, result)
         return self._finish(result, messages, max_fail_seq)
+
+    def _maybe_execute_cold(self, task: str, messages: list[dict], result: AgentResult) -> None:
+        if self._tool_calls:
+            return
+        from harness.task_executor import TaskExecutor
+
+        texts = [m.get("content", "") for m in messages if m.get("role") == "assistant"]
+        report = TaskExecutor(self).execute(task, texts)
+        if not report.executed:
+            return
+        self._tool_calls.extend(report.executed)
+        result.tool_results.extend(report.results)
+        result.executed_by_executor = True
+        parts = ["【已执行】模型未调用工具，由代码机制（TaskExecutor）完成："]
+        if report.files_written:
+            parts.append("创建文件 " + "、".join(report.files_written) + "。")
+        if report.commands_run:
+            parts.append("执行命令 " + "、".join(report.commands_run) + "。")
+        if report.skipped:
+            parts.append("未完成项：" + "；".join(report.skipped[:4]))
+        summary = "\n".join(parts)
+        self._emit_text(summary)
+        messages.append({"role": "assistant", "content": summary})
+        result.text = summary
 
     def _finish(self, result: AgentResult, messages: list[dict], max_fail_seq: int) -> AgentResult:
         result.messages = messages

@@ -43,7 +43,7 @@ def test_run_with_history_prepends_prior_turns(tmp_path):
 
 
 def test_run_with_history_strips_leading_system_prompt(tmp_path):
-    llm = RecordingLLM([FakeTurn(text="无需工具：直接回答")])
+    llm = RecordingLLM([FakeTurn(text="done")])
     a = Agent(llm, make_registry([bash_spec()]), LocalSandbox(), HookBus(), Policy(), StateMachine(), None,
               Config(workspace=tmp_path, tool_timeout=5))
     history = [
