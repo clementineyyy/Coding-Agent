@@ -9,7 +9,7 @@ from harness.state import StateMachine
 from harness.tools.bash import spec as bash_spec
 from harness.tools.files import spec as files_spec
 from harness.task_executor import extract_blocks, extract_targets, fallback_filename
-from harness.task_executor import is_web, web_dir
+from harness.task_executor import is_web, web_dir, _to_snake, _content_based_name
 
 
 def make_agent(tmp_path, turns, **cfg_kw):
@@ -94,3 +94,45 @@ def test_lookup_task_runs_search_command(tmp_path):
         c["name"] == "bash" and "where" in c["arguments"].get("command", "")
         for c in a._tool_calls
     )
+
+
+def test_to_snake():
+    assert _to_snake("StudentManager") == "student_manager"
+    assert _to_snake("HTMLParser") == "html_parser"
+    assert _to_snake("SimpleHTTP") == "simple_http"
+    assert _to_snake("main") == "main"
+
+
+def test_content_based_name_class():
+    assert _content_based_name("class StudentManager:\n    pass", "python") == "student_manager"
+    assert _content_based_name("class HTMLParser:", "python") == "html_parser"
+
+
+def test_content_based_name_function():
+    assert _content_based_name("def calculate_score():\n    return 100", "python") == "calculate_score"
+    assert _content_based_name("def main():\n    pass", "python") == "main"
+
+
+def test_content_based_name_no_match():
+    assert _content_based_name("x = 1", "python") is None
+    assert _content_based_name("<html></html>", "html") is None
+
+
+def test_fallback_filename_content_based():
+    assert fallback_filename("python", "", content="class StudentManager:\n    pass") == "student_manager.py"
+    assert fallback_filename("python", "", content="def calculate_score():\n    return 100") == "calculate_score.py"
+    assert fallback_filename("python", "需要你实现", content="x = 1") == "main.py"
+
+
+def test_executor_content_based_naming(tmp_path):
+    a = make_agent(tmp_path, [FakeTurn(text="```python\nclass StudentManager:\n    pass\n```")])
+    r = a.run("帮我创建学生管理")
+    assert r.executed_by_executor is True
+    assert (tmp_path / "student_manager.py").exists()
+
+
+def test_executor_content_based_function(tmp_path):
+    a = make_agent(tmp_path, [FakeTurn(text="```python\ndef calculate_score():\n    return 100\n```")])
+    r = a.run("创建计算成绩的方法")
+    assert r.executed_by_executor is True
+    assert (tmp_path / "calculate_score.py").exists()
