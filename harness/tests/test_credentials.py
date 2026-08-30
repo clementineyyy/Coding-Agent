@@ -79,7 +79,7 @@ def test_wizard_rejects_whitespace(monkeypatch):
 def test_wizard_strips_whitespace_from_pasted_key(monkeypatch):
     """PowerShell 多行粘贴常在 key 后带 \\n/\\r\\n；wizard 必须 strip 而不是把\n    脏 key 直接返回（否则 httpx header 报 InvalidHeader，验证误判失败）。"""
     import harness.credentials as creds
-    monkeypatch.setattr(creds.getpass, "getpass", lambda prompt: "  sk-dirty-key\\n")
+    monkeypatch.setattr(creds.getpass, "getpass", lambda prompt: "  sk-dirty-key\n")
     assert creds.wizard_enter_key() == "sk-dirty-key"
 
 
