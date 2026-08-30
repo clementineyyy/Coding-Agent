@@ -96,7 +96,7 @@ Coding-Agent/
   # 1) pyproject.toml 升版本号（与 tag 同步，否则 PyPI 拒绝重复上传）
   # 2) 打标签并推送，GitHub Actions publish.yml 自动构建并发布到 PyPI
   git tag vX.Y.Z
-  git push origin vX.Y.Z
+  git push coding-agent vX.Y.Z
   ```
 
 ## 凭据安全

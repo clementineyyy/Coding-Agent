@@ -43,14 +43,14 @@
 
 - 完整 commit 历史与 PR 工作流：拒绝单次 commit 提交全部代码；每个 worktree 对应一个 PR。
 - commit message / PR 描述标注：由哪个 subagent 完成、人工修改了哪些部分。
-- **双仓库同步（强制）**：本项目同时维护两个仓库——`Coding-Agent-Harness`（完整工程，含 docs/scripts 过程文档）与 `Coding-Agent`（纯净代码交付，无 docs/scripts）。每次代码变更须同步提交推送到两个仓库。
-  - `origin` → `https://github.com/clementineyyy/Coding-Agent-Harness.git`
+- **单仓库维护（强制，自 2026-08-31 起）**：旧仓库 `Coding-Agent-Harness`（remote `origin`）已弃置，不再同步、不再维护、不再推送。**所有开发、提交、发布一律只基于并只推送到新仓库 `Coding-Agent`（remote `coding-agent`）**。
   - `coding-agent` → `https://github.com/clementineyyy/Coding-Agent.git`
-  - commit 时间使用**实际提交时刻**（不重建日期）；任何提交都须 push 到两个 remote。
-- **自动发布 PyPI（强制，发布源 = 新仓库 Coding-Agent）**：每完成一个修复 / 一个新功能（攒批验证通过后）即自动走发布流程，无需等待人工指令。**Python 包一律基于 `Coding-Agent`（新仓库，未来展示仓库）发布**，并确保新仓库 Releases 页持续有记录：
+  - 本地若仍指向旧仓库的 checkout/worktree，仅作参考，禁止向旧仓库 push 任何内容。
+  - commit 时间使用**实际提交时刻**（不重建日期）。
+- **自动发布 PyPI（强制，发布源 = 新仓库 Coding-Agent）**：每完成一个修复 / 一个新功能（攒批验证通过后）即自动走发布流程，无需等待人工指令。**Python 包一律基于 `Coding-Agent`（新仓库，唯一发布源）发布**，并确保新仓库 Releases 页持续有记录：
   1. `pyproject.toml` bump 版本（patch 修复 +0.0.1；新功能 +0.1.0）。
-  2. 双仓库各 commit 一次 bump（`chore: bump version to X.Y.Z`），push 两个 remote（`origin`=Harness 完整工程、`coding-agent`=Coding-Agent 纯净交付）。
-  3. **两仓库的 CI/CD 都必须通过**（底线：CI 不绿不得发布，也禁止在 CI 未绿时打 tag）。
+  2. 在 `Coding-Agent` 提交一次 bump（`chore: bump version to X.Y.Z`），push 到 `coding-agent` remote。
+  3. **Coding-Agent 的 CI 必须通过**（底线：CI 不绿不得发布，也禁止在 CI 未绿时打 tag）。
   4. **在 Coding-Agent（新仓库，remote `coding-agent`）打 `vX.Y.Z` tag 并 push**（触发新仓库 `publish.yml` 自动 build + trust-publisher 发 PyPI）——**不在 Harness(origin) 打发布 tag**。
   5. 同时在 Coding-Agent 创建 **GitHub Release**（tag=vX.Y.Z、标题、变更说明），确保新仓库 Releases 页有版本记录。
   6. 等待新仓库 publish workflow success，并确认 PyPI 最新版本 === X.Y.Z。
