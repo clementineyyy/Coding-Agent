@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
@@ -49,6 +50,8 @@ class LocalSandbox(Sandbox):
 
     def run(self, command: str, timeout: int) -> SandboxResult:
         start = time.monotonic()
+        if os.name == "nt":
+            command = f'cmd.exe /c "{command}"'
         try:
             proc = subprocess.run(
                 command, shell=True, capture_output=True, text=True, timeout=timeout
