@@ -86,6 +86,7 @@ def test_ask_menu_eof_raises_keyboard_interrupt(tmp_path):
 def test_run_repl_with_fake_llm(tmp_path, monkeypatch, capsys):
     from harness.fake_llm import FakeLLM, FakeTurn
 
+    make_fake_store(monkeypatch, key="DUMMY-KEY")
     turns = [
         FakeTurn(tool_calls=[{"name": "bash", "arguments": {"command": "echo hi"}}]),
         FakeTurn(text="搞定了"),
@@ -93,7 +94,7 @@ def test_run_repl_with_fake_llm(tmp_path, monkeypatch, capsys):
     agent = build_agent(tmp_path, turns=turns)
     cfg = Config(workspace=tmp_path, tool_timeout=5)
     monkeypatch.setattr("harness.main.make_agent", lambda cfg: agent)
-    monkeypatch.setattr("builtins.input", lambda *a: "/exit")
+    feed_inputs(monkeypatch, ["task1", "/exit"])
     assert run_repl(cfg) == 0
     out = capsys.readouterr().out
     assert "搞定了" in out or "echo hi" in out
@@ -429,7 +430,6 @@ def test_first_help_is_command_not_task(tmp_path, monkeypatch, capsys):
 
     # stub make_agent to a minimal agent that raises if tasks run
     from harness.agent import Agent
-    from harness.fake_llm import FakeLLM, FakeTurn
 
     def fake_make_agent(cfg):
         agent = object.__new__(Agent)
@@ -443,8 +443,9 @@ def test_first_help_is_command_not_task(tmp_path, monkeypatch, capsys):
         return agent
 
     monkeypatch.setattr("harness.main.make_agent", fake_make_agent)
-    monkeypatch.setattr("builtins.input",
-                        lambda prompt: "/help" if prompt else "/help")
-    run_repl(Config(workspace=tmp_path))
+    # 输入序列必须有终止路径：/help 之后 /exit，否则 run_repl 永不返回（死循环）
+    inputs = iter(["/help", "/exit"])
+    monkeypatch.setattr("builtins.input", lambda prompt: next(inputs))
+    assert run_repl(Config(workspace=tmp_path)) == 0
     out = capsys.readouterr().out
     assert "/exit" in out and "/reset" in out and "/key" in out, out
