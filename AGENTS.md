@@ -47,4 +47,11 @@
   - `origin` → `https://github.com/clementineyyy/Coding-Agent-Harness.git`
   - `coding-agent` → `https://github.com/clementineyyy/Coding-Agent.git`
   - commit 时间使用**实际提交时刻**（不重建日期）；任何提交都须 push 到两个 remote。
+- **自动发布 PyPI（强制）**：每完成一个修复 / 一个新功能（攒批验证通过后）即自动走发布流程，无需等待人工指令：
+  1. `pyproject.toml` bump 版本（patch 修复 +0.0.1；新功能 +0.1.0）。
+  2. 双仓库各 commit 一次 bump（`chore: bump version to X.Y.Z`），push 两个 remote。
+  3. 在 Harness（origin）打 `vX.Y.Z` tag 并 push（触发 `publish.yml` 自动 build + trust-publisher 发 PyPI）。
+  4. 等待 publish workflow success，并确认 PyPI 最新版本 === X.Y.Z。
+  5. `pip install --no-cache-dir nju-coding-agent-harness==X.Y.Z` 到临时 venv 真实验证安装与 import。
+  6. 验证通过后才可声称"已发布"。
 - 最终交付物：SPEC.md、PLAN.md、SPEC_PROCESS.md、README.md、AGENT_LOG.md、CI 配置、REFLECTION.md、源码（含 mock-LLM 单测与机制演示）。Coding-Agent 仓库不含 docs/scripts（已在历史中剔除并重建日期）。
