@@ -156,7 +156,28 @@ def _english_slug(texts: list[str]) -> str | None:
     return None
 
 
-def fallback_filename(lang: str, task: str, texts: list[str] | None = None) -> str:
+def _to_snake(name: str) -> str:
+    s1 = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
+    s2 = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1)
+    return s2.lower()
+
+
+def _content_based_name(content: str, lang: str) -> str | None:
+    if lang not in ("python", "py", ""):
+        return None
+    m = re.search(r"class\s+(\w+)", content)
+    if m:
+        return _to_snake(m.group(1))
+    m = re.search(r"def\s+(\w+)", content)
+    if m:
+        return m.group(1)
+    return None
+
+
+def fallback_filename(lang: str, task: str, texts: list[str] | None = None, content: str = "") -> str:
+    cname = _content_based_name(content, lang)
+    if cname:
+        return cname + _EXT_FOR_LANG.get(lang or "python", ".py")
     base = _english_slug(texts or [task]) or "main"
     ext = _EXT_FOR_LANG.get(lang or "python", ".py")
     return base + ext
@@ -184,7 +205,7 @@ def _filename_for_block(block: Block, task: str, texts: list[str], targets: list
                 if t.endswith(ext):
                     return t
         return targets[0]
-    return fallback_filename(block.lang, task, texts)
+    return fallback_filename(block.lang, task, texts, block.content)
 
 
 class TaskExecutor:
@@ -227,7 +248,7 @@ class TaskExecutor:
             if b.kind == "code":
                 rel = _WEB_FILE_FOR_LANG.get(b.lang)
                 if rel is None:
-                    rel = fallback_filename(b.lang, task, all_texts)
+                    rel = fallback_filename(b.lang, task, all_texts, b.content)
                 self._write(report, f"{d}/{rel}", b.content)
             elif b.kind == "command":
                 self._run_command(report, b.content)

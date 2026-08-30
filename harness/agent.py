@@ -15,6 +15,7 @@ from harness.registry import (
     build_request_tools,
     validate_args,
 )
+from harness.task_executor import TaskExecutor
 
 if TYPE_CHECKING:
     from harness.config import Config
@@ -30,6 +31,9 @@ _BASE_PROMPT = (
     "你是编码代理助手，运行在用户本机。"
     "必须使用工具实际执行任务，而不是只给出建议。"
     "流程：先规划，再调用工具执行，最后根据工具结果给出最终答案。"
+    "创建文件时，文件名必须是根据代码功能总结的有意义英文名称（如app.py、student.py），"
+    "不得使用用户输入文字作为文件名。"
+    "对于Web项目（Flask/FastAPI/Django），使用标准结构：app.py + templates/index.html + static/目录。"
 )
 
 
@@ -89,6 +93,7 @@ class Agent:
         self.warnings: list[str] = []
         self._tool_calls: list[dict] = []
         self.messages: list[dict] = []
+        self.task_executor = TaskExecutor(self.config.workspace)
 
     def context_for_tool(self) -> Context:
         return Context(
