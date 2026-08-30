@@ -46,6 +46,12 @@ def build_system_prompt(config: Config | None = None) -> str:
 
 SYSTEM_PROMPT = build_system_prompt()
 
+_NO_TOOL_NUDGE = (
+    "【工具提示】你还没有调用任何工具。这类任务需要在用户机器上实际执行"
+    "（例如用 bash 查找程序、初始化项目、创建文件）。请立即选择并调用一个工具；"
+    "若你确信确实无需任何工具，请以『无需工具』开头直接给出答案。"
+)
+
 _ASK_OPTIONS = ["y", "n", "always_allow", "never_allow"]
 
 
@@ -223,6 +229,7 @@ class Agent:
         max_fail_seq = 0
         self._compress_calls = 0
         self._tool_calls = []
+        self._no_tool_nudges = 0
         self.state.fire("task_submitted", "loop")
         while result.steps_used < self.config.max_steps:
             if self._check_budget(messages):
@@ -231,6 +238,15 @@ class Agent:
             result.steps_used += 1
             if not response.tool_calls:
                 final = response.text or "任务完成"
+                if (
+                    self._no_tool_nudges < self.config.tool_use_budget
+                    and not self._tool_calls
+                    and not final.startswith("无需工具")
+                ):
+                    self._no_tool_nudges += 1
+                    messages.append({"role": "assistant", "content": final})
+                    messages.append({"role": "system", "content": _NO_TOOL_NUDGE})
+                    continue
                 self._emit_text(final)
                 messages.append({"role": "assistant", "content": final})
                 result.text = final

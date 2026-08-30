@@ -33,6 +33,7 @@ class Config:
     base_url: str = "https://api.deepseek.com"
     max_steps: int = 50
     failure_budget: int = 3
+    tool_use_budget: int = 2
     tool_timeout: int = 30
     memory_top_k: int = 2
     max_budget_tokens: int = 6000
