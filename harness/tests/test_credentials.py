@@ -76,6 +76,27 @@ def test_wizard_rejects_whitespace(monkeypatch):
         creds.wizard_enter_key()
 
 
+def test_wizard_strips_whitespace_from_pasted_key(monkeypatch):
+    """PowerShell 多行粘贴常在 key 后带 \\n/\\r\\n；wizard 必须 strip 而不是把\n    脏 key 直接返回（否则 httpx header 报 InvalidHeader，验证误判失败）。"""
+    import harness.credentials as creds
+    monkeypatch.setattr(creds.getpass, "getpass", lambda prompt: "  sk-dirty-key\\n")
+    assert creds.wizard_enter_key() == "sk-dirty-key"
+
+
+def test_verify_api_key_header_whitespace_returns_false_not_raise():
+    """带换行的 key 会被 httpx 判为非法 header；verify_api_key 必须兜住\n    ValueError/TypeError 返回 False，而不是向上抛异常搞挂 /key 流程。"""
+    import httpx as _httpx
+    import harness.credentials as creds
+    handler = lambda r: (_httpx.Response(200, json={}) if True else None)
+    client = _httpx.Client(transport=_httpx.MockTransport(lambda r: _httpx.Response(401)))
+
+    def boom(request):
+        raise ValueError("invalid header value")
+
+    client2 = _httpx.Client(transport=_httpx.MockTransport(boom))
+    assert creds.verify_api_key("https://api.example.com", "sk-x\\n", http_client=client2) is False
+
+
 def test_verify_api_key_success():
     seen = {}
 

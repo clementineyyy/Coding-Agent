@@ -18,7 +18,7 @@ def verify_api_key(base_url: str, api_key: str, http_client: httpx.Client | None
             headers={"Authorization": f"Bearer {api_key}"},
         )
         return resp.status_code == 200
-    except httpx.HTTPError:
+    except (httpx.HTTPError, ValueError, TypeError):
         return False
     finally:
         if http_client is None:
@@ -111,6 +111,7 @@ class CredentialStore:
 
 def wizard_enter_key() -> str:
     key = getpass.getpass("请粘贴 API Key（输入不可见）: ")
-    if not key.strip():
+    key = key.strip()  # 剪掉粘贴可能带上的前导/尾随空白（PowerShell 多行粘贴常见）
+    if not key:
         raise ValueError("API Key 不能为空")
     return key
