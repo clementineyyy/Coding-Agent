@@ -404,3 +404,47 @@ def test_main_parses_config_arg(monkeypatch, tmp_path):
     monkeypatch.setattr("harness.main.run_repl", fake_run)
     assert main(["--config", str(p)]) == 0
     assert captured["cfg"].model == "deepseek-reasoner"
+
+
+def test_first_help_is_command_not_task(tmp_path, monkeypatch, capsys):
+    """AGENTS.md 纪律：REPL 首个斜杠输入（/help）必须直接执行命令，
+    而不是作为任务交给 LLM。此测试验证 first=True 时 slash 依然分发。"""
+    from harness.config import Config
+    from harness.main import run_repl
+    from harness.credentials import CredentialStore
+
+    class FakeStore:
+        def get(self): return "DUMMY-KEY"
+        def set(self, k): pass
+        def status(self): return {"configured": True, "source": "env", "verified_at": None}
+
+    monkeypatch.setattr("harness.main.CredentialStore", lambda: FakeStore())
+
+    class NoLLM:
+        def __init__(self):
+            self.calls = 0
+        def complete(self, messages, tools):
+            self.calls += 1
+            raise AssertionError("LLM should not be called for /help")
+
+    # stub make_agent to a minimal agent that raises if tasks run
+    from harness.agent import Agent
+    from harness.fake_llm import FakeLLM, FakeTurn
+
+    def fake_make_agent(cfg):
+        agent = object.__new__(Agent)
+        agent.llm = NoLLM()
+        agent.config = cfg
+        agent.messages = []
+        agent.hooks = None
+        agent.on_text = None
+        agent._tool_calls = []
+        agent.policy = None
+        return agent
+
+    monkeypatch.setattr("harness.main.make_agent", fake_make_agent)
+    monkeypatch.setattr("builtins.input",
+                        lambda prompt: "/help" if prompt else "/help")
+    run_repl(Config(workspace=tmp_path))
+    out = capsys.readouterr().out
+    assert "/exit" in out and "/reset" in out and "/key" in out, out

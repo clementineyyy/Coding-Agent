@@ -166,7 +166,7 @@ def run_repl(config: Config) -> int:
         print(f"启动失败: {exc}")
         agent = None
     print("编码代理 REPL — 输入任务开始；/help 查看命令；顶层 Ctrl+C 退出")
-    first = True
+    # first = True  # (unused after slash-dispatch fix)
     while True:
         try:
             line = input(PROMPT)
@@ -181,12 +181,12 @@ def run_repl(config: Config) -> int:
         line = line.strip()
         if not line:
             continue
-        if not first and line.startswith("/"):
+        if line.startswith("/"):
             code, agent = _dispatch_command(agent, store, config, line)
             if code is not None:
                 return code
             continue
-        first = False
+        # first = False  # (unused; slash commands always dispatch)
         _run_task(agent, line)
 
 
