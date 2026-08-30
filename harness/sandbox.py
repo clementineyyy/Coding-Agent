@@ -50,11 +50,12 @@ class LocalSandbox(Sandbox):
 
     def run(self, command: str, timeout: int) -> SandboxResult:
         start = time.monotonic()
+        kwargs = {}
         if os.name == "nt":
-            command = f'cmd.exe /c "{command}"'
+            kwargs["executable"] = os.environ.get("COMSPEC", "cmd.exe")
         try:
             proc = subprocess.run(
-                command, shell=True, capture_output=True, text=True, timeout=timeout
+                command, shell=True, capture_output=True, text=True, timeout=timeout, **kwargs
             )
             stdout, stderr, exit_code = proc.stdout, proc.stderr, proc.returncode
         except subprocess.TimeoutExpired as exc:
