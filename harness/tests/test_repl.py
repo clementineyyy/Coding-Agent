@@ -386,8 +386,9 @@ def test_run_repl_threads_conversation_history(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("harness.main.make_agent", lambda cfg: agent)
     feed_inputs(monkeypatch, ["task1", "task2", "/exit"])
     assert run_repl(Config(workspace=tmp_path, tool_timeout=5)) == 0
-    assert len(rec.seen) == 2
-    second = " ".join(str(m.get("content", "")) for m in rec.seen[1])
+    # tool_use_budget=2：两个纯文本任务各需 3 轮（两次工具提示 + 最终答复）
+    assert len(rec.seen) == 6
+    second = " ".join(str(m.get("content", "")) for m in rec.seen[3])
     assert "task1" in second and "第一轮答复" in second and "task2" in second
 
 
