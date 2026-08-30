@@ -20,8 +20,8 @@ def test_narrate_then_nudge_then_call_tool(tmp_path):
     a = make_agent(
         tmp_path,
         [
-            FakeTurn(text="计划：我会用 bash 查找 MySQL。"),
-            FakeTurn(tool_calls=[{"name": "bash", "arguments": {"command": "where mysql"}}]),
+            FakeTurn(text="计划：我会用 bash 查找程序。"),
+            FakeTurn(tool_calls=[{"name": "bash", "arguments": {"command": "echo hi"}}]),
             FakeTurn(text="搞定了"),
         ],
     )
