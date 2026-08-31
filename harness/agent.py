@@ -104,11 +104,14 @@ class Agent:
             registry=self.registry,
         )
 
-    def pipeline(self, call: dict, ctx: Context) -> ToolResult:
+    def pipeline(self, call: dict, ctx: Context, on_event: Callable[[str, dict], None] | None = None) -> ToolResult:
         name = call["name"]
         args = call["arguments"]
         verdict = evaluate(self.policy.rules, name, args)
         if verdict.action == "deny":
+            if on_event:
+                on_event("tool_call", {"name": name, "arguments": args, "index": 0})
+                on_event("tool_output", {"name": name, "error": f"guardrail denied: {verdict.reason}", "status": "error", "index": 0})
             return ToolResult(status="error", error=f"guardrail denied: {verdict.reason}")
         if verdict.action == "ask":
             self.state.fire("approval_needed", "guardrail")
@@ -117,7 +120,12 @@ class Agent:
             if self.state.state == "awaiting_user":
                 self.state.fire("user_answered", "user")
             if answer in ("n", "never_allow"):
+                if on_event:
+                    on_event("tool_call", {"name": name, "arguments": args, "index": 0})
+                    on_event("tool_output", {"name": name, "error": f"guardrail denied: {verdict.reason}", "status": "error", "index": 0})
                 return ToolResult(status="error", error=f"guardrail denied: {verdict.reason}")
+        if on_event:
+            on_event("tool_call", {"name": name, "arguments": args, "index": 0})
         if self.state.state == "awaiting_user":
             self.state.fire("user_answered", "user")
         args, ok = self.hooks.pre_tool_use(name, args)
@@ -347,9 +355,7 @@ class Agent:
             })
             for i, call in enumerate(response.tool_calls):
                 tool_id = f"call_{call_uid - len(response.tool_calls) + i}"
-                if on_event:
-                    on_event("tool_call", {"name": call["name"], "arguments": call["arguments"], "index": i})
-                tool_result = self.pipeline(call, self.context_for_tool())
+                tool_result = self.pipeline(call, self.context_for_tool(), on_event=on_event)
                 result.tool_results.append(tool_result)
                 self._tool_calls.append({"name": call["name"], "arguments": call["arguments"]})
                 if on_event:

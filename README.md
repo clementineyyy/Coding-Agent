@@ -1,18 +1,15 @@
 # Coding Agent Harness
 
-一个真实的编码智能体框架（Python 3.11+，Windows/Linux）：以 REPL 交互为核心，
+一个真实的编码智能体框架（Python 3.11+，Windows/Linux）：以 REPL / WebUI 交互为核心，
 内置治理护栏（deny/ask 审批）、自适应策略、TF-IDF 记忆、上下文预算与压缩、
 HITL 状态机与工具执行沙箱；全量测试离线、确定性可复现（FakeLLM +
 MockTransport），已发布至 PyPI。
-
-设计规格见 `docs/superpowers/specs/SPEC.md`（下文以 `§x.y` 引用章节号）。
-
-## 组件图（SPEC §5.1）
+## 项目组件图
 
 ![组件图](FullPic.jpg)
 
 职责划分：Agent 只负责循环与状态；工具流水线只负责"一次调用"的判定-执行；
-护栏/策略/钩子/沙箱各自单一职责；状态机是交互主轴。完整数据流见 SPEC §5.2。
+护栏/策略/钩子/沙箱各自单一职责；状态机是交互主轴。
 
 ## 目录结构
 
@@ -64,7 +61,8 @@ Coding-Agent/
 3. **运行**：
 
    ```bash
-   cah                       # 等价 python -m harness.main
+   cah                       # 等价 python -m harness.main（REPL 交互）
+   cah --web                 # 启动 WebUI（http://localhost:8756）
    ```
 
    提示符 `> ` 下直接输入任务（例如"修复 main.py 里的 bug"）；**首次输入
@@ -156,6 +154,8 @@ Coding-Agent/
 | `compression_max_rounds` | `3` | 单任务压缩轮数上限 |
 | `max_output_bytes` | `51200` | 工具输出截断上限 |
 | `workspace` | 当前目录 | 工作区（文件/记忆/技能/转录根） |
+| `sandbox_backend` | `local` | 沙箱后端：`local`（直接执行）/ `docker`（容器隔离） |
+| `network_enabled` | `true` | 是否允许网络访问 |
 | `mcp_servers` | `[]` | MCP 服务器列表（§5.3） |
 
 **配置优先级**：TOML 配置文件（`cah --config config.toml`）> 环境变量 /
@@ -233,17 +233,19 @@ notes/memory/skills/subagent/ask）、MCP 客户端 `mcp.py`、钩子 `hooks.py`
 
 ## 沙箱执行策略（重要，§11.3）
 
-**沙箱执行器 = local 护栏 + Docker 真实隔离，自动接线。**
+**沙箱执行器 = local 护栏 + Docker 可选隔离。**
 
-运行启动时自动探测 Docker：
+默认使用 `LocalSandbox`（`sandbox_backend = "local"`），工具直接在本机执行，
+护栏规则（deny/ask）与路径检查是第一道防线。
 
-- **Docker CLI 与 daemon 可用** → `DockerSandbox` 后端：bash 一律进入
-  `docker run --rm` 容器执行，仅挂载工作区（`-v <workspace>:/workspace`），
-  容器内无法破坏宿主文件系统、读不到宿主凭据。
-- **Docker 不可用** → 打印明确提示并**回退 `LocalSandbox`**：护栏
-  （危险模式 deny / ask）与路径包含性检查仍作为第一道防线，但执行发生在
-  宿主（非隔离边界，见下）。
-- 配置用 `sandbox_backend`（`"docker"` 默认 / `"local"`）与 `network_enabled`
+如需容器隔离，通过配置启用 Docker：
+
+- **启用方式**：`sandbox_backend = "docker"`（TOML 配置、`.env` 中
+  `SANDBOX_BACKEND=docker`、或环境变量）。
+- **Docker 可用时**：bash 进入 `docker run --rm -w /workspace` 容器执行，
+  挂载工作区（`-v <workspace>:/workspace`），文件变更同步回本地。
+- **Docker 不可用时**：打印提示并回退 `LocalSandbox`。
+- 配置用 `sandbox_backend`（`"local"` 默认 / `"docker"`）与 `network_enabled`
   控制（见 §11.3）。
 
 ## 网络策略（§11.3）
@@ -253,11 +255,14 @@ notes/memory/skills/subagent/ask）、MCP 客户端 `mcp.py`、钩子 `hooks.py`
   local 后端下网络类工具被拒绝。
 - 危险网络/破坏性命令始终先经护栏（deny/ask）。
 
-## Docker 不可用时
+## Docker 可选配置
 
-- 自动回退 local 并提示"未检测到 Docker，回退 local 沙箱（护栏仍为第一道防线）"。
-- 镜像默认 `python:3.11-slim`，需预装工具链（python/git 等）。
-- Windows：需 Docker Desktop 并保持运行；挂载路径请使用绝对路径。
+默认使用 `LocalSandbox`，无需 Docker。如需容器隔离：
+
+- 配置 `sandbox_backend = "docker"`（TOML 配置、`.env` 中 `SANDBOX_BACKEND=docker`）。
+- 启用后自动探测 Docker CLI 与 daemon；不可用时回退 local 并提示。
+- 镜像默认 `python:3.11-slim`，容器内工作目录为 `/workspace`（与宿主机 workspace 共享）。
+- Windows：需 Docker Desktop 并保持运行。
 
 ## 安全边界说明
 
@@ -267,14 +272,15 @@ notes/memory/skills/subagent/ask）、MCP 客户端 `mcp.py`、钩子 `hooks.py`
 |---|---|
 | 护栏（第一道防线） | 内置 deny 清单拦截**无正当用途的破坏操作**（`rm -rf` 系统根目录、`format`、强删等）；敏感但可能正当的操作走 **ask 审批**（HITL 菜单），批准/拒绝沉淀为策略规则（§11.2） |
 | 路径包含性检查 | 文件类工具对工作区外路径直接 deny（§11.2） |
-| 沙箱（local 回退） | **不是安全边界**：宿主直接子进程，仅超时/截断；仅当 Docker 不可用时使用（§11.3） |
-| 沙箱（docker 自动） | 真隔离：仅挂载工作区、容器内读不到宿主凭据与文件系统；`network_enabled=false` 时加 `--network=none` 断网（§11.3） |
+| 沙箱（local 默认） | **非隔离**：宿主直接子进程，仅超时/截断；护栏规则是主要防线（§11.3） |
+| 沙箱（docker 可选） | 真隔离：仅挂载工作区、容器内读不到宿主凭据与文件系统；需在配置中显式启用 `sandbox_backend = "docker"`（§11.3） |
 | 网络闸门 | 默认开网（`network_enabled=true`）供网页抓取/联网命令；`false` 时容器断网 / 网络工具拒绝；危险网络命令仍走 ask 审批（§11.3） |
 | 凭据边界 | keyring 加密存储优先，`.env` 明文备选；key **永不写入**日志/转录/记忆/策略；`/key status` 绝不回显明文 |
 | 数据边界 | 转录写工作区 `transcripts/`、记忆写 `memory/`（均被 `.gitignore` 排除）；上下文超预算自动压缩，防溢出 |
 
 **威胁模型假设**：本地用户自身可信；护栏防的是 **agent 失控 / 误操作**，
-不是防恶意本地进程——若需对抗不可信输入，请务必启用 Docker 沙箱后端。
+不是防恶意本地进程——若需对抗不可信输入，请启用 Docker 沙箱后端
+（`sandbox_backend = "docker"`）。
 
 ## 测试
 
