@@ -5,7 +5,9 @@ from harness.registry import Tool, ToolResult
 
 def spec() -> Tool:
     def handler(args: dict, ctx) -> ToolResult:
-        result = ctx.sandbox.run(args["command"], ctx.config.tool_timeout)
+        command = args["command"]
+        command = _inject_curl_timeout(command, ctx.config.tool_timeout)
+        result = ctx.sandbox.run(command, ctx.config.tool_timeout)
         if result.exit_code == -1 and "timeout" in (result.stderr or "").lower():
             status = "timeout"
         else:
@@ -36,3 +38,15 @@ def spec() -> Tool:
     )
     tool.handler = handler
     return tool
+
+
+def _inject_curl_timeout(command: str, timeout: int) -> str:
+    """为 curl 命令自动注入 --connect-timeout 和 --max-time，防止长时间挂起。"""
+    import re
+    if not re.search(r'\bcurl\b', command):
+        return command
+    if '--connect-timeout' in command or '--max-time' in command:
+        return command
+    ct = max(5, timeout // 3)
+    mt = max(10, timeout)
+    return command.replace("curl", f"curl --connect-timeout {ct} --max-time {mt}", 1)
