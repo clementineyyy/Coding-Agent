@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Callable, Coroutine
 
 from harness.agent import Agent
@@ -106,14 +107,17 @@ class StreamAgent:
 
     async def chat(self, message: str, push: Callable[[dict], Coroutine[Any, Any, None]]):
         """处理用户消息，通过 push 协程逐条推送事件。"""
-        events = []
+        loop = asyncio.get_running_loop()
 
         def on_event(event_type: str, data: dict):
-            events.append({"type": event_type, **data})
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    push({"type": event_type, **data}), loop
+                )
+            except Exception:
+                pass
 
-        result = self.agent.chat(message, on_event=on_event)
-        for event in events:
-            await push(event)
+        result = await asyncio.to_thread(self.agent.chat, message, on_event=on_event)
         await push({"type": "done"})
         return result
 
