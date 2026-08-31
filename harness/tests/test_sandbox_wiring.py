@@ -8,7 +8,7 @@ from harness.sandbox import DockerSandbox, LocalSandbox
 
 def test_config_defaults_docker_backend_and_network_enabled():
     c = Config()
-    assert c.sandbox_backend == "docker"
+    assert c.sandbox_backend == "local"
     assert c.network_enabled is True
 
 
@@ -26,7 +26,7 @@ def test_make_agent_with_docker_available(tmp_path, monkeypatch):
     store = SimpleNamespace(get=lambda: "DUMMY-KEY")
     monkeypatch.setattr("harness.main.CredentialStore", lambda *a, **k: store)
     monkeypatch.setattr("harness.main._docker_available", lambda: True)
-    agent = make_agent(Config(workspace=tmp_path, tool_timeout=5))
+    agent = make_agent(Config(workspace=tmp_path, tool_timeout=5, sandbox_backend="docker"))
     assert isinstance(agent.sandbox, DockerSandbox)
     assert agent.sandbox.network_enabled is True
 
@@ -63,7 +63,7 @@ def test_make_agent_falls_back_local_when_docker_missing(tmp_path, monkeypatch, 
     store = SimpleNamespace(get=lambda: "DUMMY-KEY")
     monkeypatch.setattr("harness.main.CredentialStore", lambda *a, **k: store)
     with patch("shutil.which", return_value=None):
-        agent = make_agent(Config(workspace=tmp_path, tool_timeout=5))
+        agent = make_agent(Config(workspace=tmp_path, tool_timeout=5, sandbox_backend="docker"))
     assert isinstance(agent.sandbox, LocalSandbox)
     out = capsys.readouterr().out
     assert "Docker" in out and "local" in out.lower()

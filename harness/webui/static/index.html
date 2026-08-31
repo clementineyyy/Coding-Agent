@@ -654,7 +654,7 @@
                 if (!this.currentMessageElement) return;
                 
                 const contentDiv = this.currentMessageElement.querySelector('.message-content');
-                contentDiv.textContent += content;
+                contentDiv.insertAdjacentText('beforeend', content);
                 this.currentMessageElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
             }
 

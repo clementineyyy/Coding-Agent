@@ -41,7 +41,7 @@ class Config:
     workspace: Path = field(default_factory=Path.cwd)
     max_output_bytes: int = 51200
     mcp_servers: list[dict] = field(default_factory=list)
-    sandbox_backend: str = "docker"
+    sandbox_backend: str = "local"
     network_enabled: bool = True
 
     @classmethod
