@@ -296,6 +296,96 @@ class Agent:
         self._maybe_execute_cold(task, messages, result)
         return self._finish(result, messages, max_fail_seq)
 
+    def chat(self, message: str, on_event: Callable[[str, dict], None] | None = None) -> AgentResult:
+        """多轮对话：在 self.messages 基础上追加用户消息并继续 LLM 循环。"""
+        result = AgentResult()
+        self.state.fire("task_submitted", "loop")
+        if not self.messages:
+            self.messages = [
+                {"role": "system", "content": build_system_prompt(self.config)},
+            ]
+            if self.memory is not None:
+                for chunk in self.memory.top_k_chunks(message):
+                    self.messages.append(
+                        {"role": "system", "content": f"[memory] {chunk['chunk']}"}
+                    )
+        self.messages.append({"role": "user", "content": message})
+        call_uid = len(self._tool_calls)
+        fail_seq = 0
+        fail_tool: str | None = None
+        max_fail_seq = 0
+        self._compress_calls = 0
+        while result.steps_used < self.config.max_steps:
+            if self._check_budget(self.messages):
+                self.messages = self._compress(self.messages)
+            response = self.llm.complete(self.messages, build_request_tools(self.registry))
+            result.steps_used += 1
+            if not response.tool_calls:
+                final = response.text or "任务完成"
+                self.messages.append({"role": "assistant", "content": final})
+                result.text = final
+                if on_event:
+                    on_event("token", {"content": final})
+                return self._finish(result, self.messages, max_fail_seq)
+            if on_event and response.text:
+                on_event("token", {"content": response.text})
+            assistant_call = []
+            for i, call in enumerate(response.tool_calls):
+                assistant_call.append({
+                    "id": f"call_{call_uid}",
+                    "type": "function",
+                    "function": {
+                        "name": call["name"],
+                        "arguments": json.dumps(call["arguments"], ensure_ascii=False),
+                    },
+                })
+                call_uid += 1
+            self.messages.append({
+                "role": "assistant",
+                "content": response.text,
+                "tool_calls": assistant_call,
+            })
+            for i, call in enumerate(response.tool_calls):
+                tool_id = f"call_{call_uid - len(response.tool_calls) + i}"
+                if on_event:
+                    on_event("tool_call", {"name": call["name"], "arguments": call["arguments"]})
+                tool_result = self.pipeline(call, self.context_for_tool())
+                result.tool_results.append(tool_result)
+                self._tool_calls.append({"name": call["name"], "arguments": call["arguments"]})
+                if on_event:
+                    on_event("tool_output", {"name": call["name"], "output": tool_result.output, "error": tool_result.error, "status": tool_result.status})
+                self.messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_id,
+                    "name": call["name"],
+                    "content": json.dumps(self._result_to_dict(tool_result), ensure_ascii=False),
+                })
+                norm = self._result_to_dict(tool_result)
+                failed = norm.get("status") != "success" or bool(norm.get("error"))
+                if failed:
+                    if call["name"] == fail_tool:
+                        fail_seq += 1
+                    else:
+                        fail_seq = 1
+                        fail_tool = call["name"]
+                    max_fail_seq = max(max_fail_seq, fail_seq)
+                    if fail_seq >= self.config.failure_budget:
+                        final = f"连续失败 {fail_seq} 次（工具 {fail_tool}），超过失败预算 {self.config.failure_budget}，停止重试。"
+                        self.messages.append({"role": "assistant", "content": final})
+                        result.text = final
+                        if on_event:
+                            on_event("token", {"content": final})
+                        return self._finish(result, self.messages, max_fail_seq)
+                else:
+                    fail_seq = 0
+                    fail_tool = None
+        final = f"达到步数上限 {self.config.max_steps}，任务终止，未挂死。"
+        self.messages.append({"role": "assistant", "content": final})
+        result.text = final
+        if on_event:
+            on_event("token", {"content": final})
+        return self._finish(result, self.messages, max_fail_seq)
+
     def _maybe_execute_cold(self, task: str, messages: list[dict], result: AgentResult) -> bool:
         if self._tool_calls:
             return False

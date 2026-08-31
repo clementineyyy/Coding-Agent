@@ -96,3 +96,38 @@ def test_rate_limit_retries_once_then_raises(monkeypatch):
     with pytest.raises(LLMRateLimitError):
         llm.complete([], [])
     assert calls["n"] == 2
+
+
+def test_complete_stream_tokens():
+    import httpx
+    payload = [
+        {"choices": [{"delta": {"content": "你好"}}]},
+        {"choices": [{"delta": {"content": "世界"}}]},
+        {"choices": [{"delta": {}, "finish_reason": "stop"}]},
+    ]
+    lines = "\n\n".join(f"data: {json.dumps(c)}" for c in payload) + "\n\ndata: [DONE]\n\n"
+    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, text=lines, headers={"Content-Type": "text/event-stream"})))
+    llm = OpenAILLM("test-key", http_client=client)
+    events = list(llm.complete_stream([{"role": "user", "content": "x"}], []))
+    tokens = [e[1]["content"] for e in events if e[0] == "token"]
+    assert "".join(tokens) == "你好世界"
+
+
+def test_complete_stream_tool_calls():
+    import httpx
+    payload = [
+        {"choices": [{"delta": {"content": "让我查一下"}}]},
+        {"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "c1", "function": {"name": "bash", "arguments": ""}}]}}]},
+        {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": '{"comm'}}]}}]},
+        {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": 'and": "ls"}'}}]}}]},
+        {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]},
+    ]
+    lines = "\n\n".join(f"data: {json.dumps(c)}" for c in payload) + "\n\ndata: [DONE]\n\n"
+    client = httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(200, text=lines, headers={"Content-Type": "text/event-stream"})))
+    llm = OpenAILLM("test-key", http_client=client)
+    events = list(llm.complete_stream([{"role": "user", "content": "x"}], []))
+    tokens = [e[1]["content"] for e in events if e[0] == "token"]
+    done_events = [e for e in events if e[0] == "done"]
+    assert "".join(tokens) == "让我查一下"
+    assert len(done_events) == 1
+    assert done_events[0][1]["tool_calls"] == [{"name": "bash", "arguments": {"command": "ls"}}]

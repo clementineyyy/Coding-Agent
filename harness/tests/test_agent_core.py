@@ -97,3 +97,35 @@ def test_ask_deny_then_final_answer_does_not_crash(tmp_path):
     assert r.text == "done"
     assert st.state == "completed"
     assert st.event_history[-1]["event"] == "final_answer"
+
+
+def test_chat_preserves_context(tmp_path):
+    from harness.fake_llm import FakeLLM, FakeTurn
+    from harness.agent import Agent
+    from harness.config import Config
+    from harness.hooks import HookBus
+    from harness.policy import Policy
+    from harness.registry import make_registry
+    from harness.sandbox import LocalSandbox
+    from harness.state import StateMachine
+    from harness.tools.bash import spec as bash_spec
+
+    sb = LocalSandbox()
+    cfg = Config(workspace=tmp_path, tool_timeout=5)
+    reg = make_registry([bash_spec()])
+    llm = FakeLLM([
+        FakeTurn(text="第一次回复"),
+        FakeTurn(text="第二次回复"),
+    ])
+    a = Agent(llm, reg, sb, HookBus(), Policy(), StateMachine(), None, cfg)
+    # Use chat() twice
+    r1 = a.chat("第一条消息")
+    assert "第一次回复" in r1.text
+    assert len(a.messages) >= 4  # system + user1 + asst1 (+ maybe extra)
+    r2 = a.chat("第二条消息")
+    assert "第二次回复" in r2.text
+    # Verify context was preserved: messages should include both rounds
+    user_msgs = [m for m in a.messages if m.get("role") == "user"]
+    assert len(user_msgs) == 2
+    assert user_msgs[0]["content"] == "第一条消息"
+    assert user_msgs[1]["content"] == "第二条消息"

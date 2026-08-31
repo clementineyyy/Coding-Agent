@@ -462,8 +462,30 @@ def main(argv: list[str] | None = None) -> int:
         "--config", "-c", type=Path, default=None,
         help="TOML 配置文件路径（优先级最高）；未指定时读取环境变量 / .env 覆盖（DEEPSEEK_BASE_URL / DEEPSEEK_MODEL）",
     )
+    parser.add_argument(
+        "--web", action="store_true", help="启动 WebUI 服务器"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8756, help="WebUI 端口（默认 8756）"
+    )
     args = parser.parse_args(argv)
+    if args.web:
+        return run_web(args.port, args.config)
     return run_repl(Config.load(args.config))
+
+
+def run_web(port: int, config_path: Path | None) -> int:
+    """启动 WebUI 服务器。"""
+    import uvicorn
+    from harness.webui.server import app
+    
+    # Load config to ensure it's valid
+    Config.load(config_path)
+    
+    print(f"WebUI 服务器启动于 http://localhost:{port}")
+    print("按 Ctrl+C 停止服务器")
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    return 0
 
 
 if __name__ == "__main__":

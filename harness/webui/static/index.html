@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coding Agent WebUI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #1a1b1e;
+            --sidebar-dark: #25262b;
+            --card-dark: #2c2e33;
+            --text-dark: #e9ecef;
+            --text-muted-dark: #adb5bd;
+            --border-dark: #495057;
+            --accent: #4c9aff;
+            --bash-accent: #28a745;
+            --file-accent: #007bff;
+            --web-accent: #6f42c1;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            
+            --bg-light: #ffffff;
+            --sidebar-light: #f8f9fa;
+            --card-light: #f1f3f5;
+            --text-light: #212529;
+            --text-muted-light: #6c757d;
+            --border-light: #dee2e6;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-dark);
+            line-height: 1.5;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* Theme switcher */
+        body.light-theme {
+            --bg: var(--bg-light);
+            --sidebar: var(--sidebar-light);
+            --card: var(--card-light);
+            --text: var(--text-light);
+            --text-muted: var(--text-muted-light);
+            --border: var(--border-light);
+            background-color: var(--bg);
+            color: var(--text);
+        }
+
+        body.dark-theme {
+            --bg: var(--bg-dark);
+            --sidebar: var(--sidebar-dark);
+            --card: var(--card-dark);
+            --text: var(--text-dark);
+            --text-muted: var(--text-muted-dark);
+            --border: var(--border-dark);
+            background-color: var(--bg);
+            color: var(--text);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 256px;
+            background-color: var(--sidebar);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s ease;
+        }
+
+        .sidebar.collapsed {
+            width: 60px;
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .sidebar-toggle {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .sidebar-toggle:hover {
+            background-color: var(--card);
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+
+        .sidebar-section h3 {
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-button {
+            width: 100%;
+            padding: 12px 16px;
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 6px;
+            cursor: pointer;
+            text-align: left;
+            margin-bottom: 8px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-button:hover {
+            background-color: var(--card);
+            border-color: var(--accent);
+        }
+
+        .sidebar-button.active {
+            background-color: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        /* Main content */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            max-width: 75%;
+            padding: 12px 16px;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            background-color: var(--card);
+            border: 1px solid var(--border);
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+            background-color: transparent;
+            border: 1px solid transparent;
+        }
+
+        .message-content {
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-family: 'JetBrains Mono', 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .tool-call {
+            margin-top: 12px;
+            border-left: 3px solid;
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: var(--card);
+        }
+
+        .tool-call.bash { border-color: var(--bash-accent); }
+        .tool-call.file { border-color: var(--file-accent); }
+        .tool-call.web { border-color: var(--web-accent); }
+        .tool-call.other { border-color: var(--text-muted); }
+
+        .tool-header {
+            padding: 8px 12px;
+            background-color: var(--sidebar);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: 500;
+        }
+
+        .tool-trigger {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .tool-content {
+            padding: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            background-color: var(--bg);
+            border-top: 1px solid var(--border);
+        }
+
+        .tool-content.collapsed {
+            display: none;
+        }
+
+        /* Input area */
+        .input-area {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            background-color: var(--bg);
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            gap: 8px;
+        }
+
+        .text-input {
+            flex: 1;
+            min-height: 40px;
+            max-height: 120px;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background-color: var(--card);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            outline: none;
+        }
+
+        .text-input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(76, 154, 255, 0.2);
+        }
+
+        .send-button {
+            padding: 8px 16px;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background-color: #3a7de0;
+        }
+
+        .send-button:disabled {
+            background-color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        .stop-button {
+            padding: 8px 16px;
+            background-color: var(--danger);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+        }
+
+        .stop-button:hover {
+            background-color: #c82333;
+        }
+
+        /* Status indicators */
+        .status-indicator {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 4px;
+            margin-top: 8px;
+        }
+
+        .status-indicator.connected { color: var(--success); }
+        .status-indicator.connecting { color: var(--warning); }
+        .status-indicator.disconnected { color: var(--danger); }
+
+        /* Loading animation */
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--text-muted);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Utilities */
+        .hidden { display: none; }
+        .flex { display: flex; }
+    </style>
+</head>
+<body class="dark-theme">
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span class="sidebar-logo">Coding Agent</span>
+            <button class="sidebar-toggle" onclick="toggleSidebar()">☰</button>
+        </div>
+        <div class="sidebar-content">
+            <div class="sidebar-section">
+                <h3>对话</h3>
+                <button class="sidebar-button" onclick="newChat()">
+                    <span>+</span>
+                    <span>新建对话</span>
+                </button>
+                <div id="chat-list">
+                    <!-- Chat history will be populated here -->
+                </div>
+            </div>
+            <div class="sidebar-section">
+                <h3>工作区</h3>
+                <button class="sidebar-button" onclick="showFileBrowser()">
+                    <span>📁</span>
+                    <span>文件浏览器</span>
+                </button>
+            </div>
+            <div class="sidebar-section">
+                <h3>设置</h3>
+                <button class="sidebar-button" onclick="showSettings()">
+                    <span>⚙️</span>
+                    <span>系统设置</span>
+                </button>
+                <button class="sidebar-button" onclick="toggleTheme()">
+                    <span>🌙</span>
+                    <span>切换主题</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main content -->
+    <div class="main-content">
+        <div class="chat-area" id="chat-area">
+            <div class="message assistant">
+                <div class="message-content">
+                    👋 欢迎使用 Coding Agent WebUI！我是你的 AI 助手，可以在你的电脑上执行代码、编辑文件、运行命令。
+                </div>
+            </div>
+        </div>
+        
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea 
+                    class="text-input" 
+                    id="message-input" 
+                    placeholder="输入你的消息... (Shift+Enter 换行)"
+                    rows="1"
+                    onkeydown="handleKeydown(event)"
+                ></textarea>
+                <button class="send-button" id="send-button" onclick="sendMessage()">发送</button>
+                <button class="stop-button hidden" id="stop-button" onclick="stopGeneration()">停止</button>
+            </div>
+            <div class="status-indicator" id="status-indicator">已连接</div>
+        </div>
+    </div>
+
+    <script>
+        class WebUIClient {
+            constructor() {
+                this.ws = null;
+                this.reconnectTimeout = null;
+                this.isConnected = false;
+                this.isGenerating = false;
+                this.currentMessageId = null;
+                this.currentToolId = null;
+                
+                // Event handlers
+                this.onMessage = null;
+                this.onToolCall = null;
+                this.onDone = null;
+                this.onError = null;
+            }
+
+            connect() {
+                const port = window.location.port || 8756;
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.hostname}:${port}/ws`;
+                
+                this.setStatus('connecting', '连接中...');
+                this.ws = new WebSocket(wsUrl);
+                
+                this.ws.onopen = () => {
+                    this.isConnected = true;
+                    this.setStatus('connected', '已连接');
+                    console.log('WebSocket connected');
+                };
+
+                this.ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        this.handleMessage(data);
+                    } catch (error) {
+                        console.error('Failed to parse message:', error);
+                    }
+                };
+
+                this.ws.onclose = () => {
+                    this.isConnected = false;
+                    this.setStatus('disconnected', '连接断开');
+                    console.log('WebSocket disconnected');
+                    this.scheduleReconnect();
+                };
+
+                this.ws.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    this.setStatus('disconnected', '连接错误');
+                };
+            }
+
+            scheduleReconnect() {
+                if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+                this.reconnectTimeout = setTimeout(() => {
+                    console.log('Attempting to reconnect...');
+                    this.connect();
+                }, 3000);
+            }
+
+            handleMessage(data) {
+                if (data.type === 'token') {
+                    if (this.onMessage) this.onMessage(data.content);
+                } else if (data.type === 'tool_call') {
+                    if (this.onToolCall) this.onToolCall(data);
+                } else if (data.type === 'tool_output') {
+                    if (this.onToolCall) this.onToolCall(data, true);
+                } else if (data.type === 'done') {
+                    this.isGenerating = false;
+                    if (this.onDone) this.onDone();
+                } else if (data.type === 'error') {
+                    if (this.onError) this.onError(data.content);
+                }
+            }
+
+            sendChat(message) {
+                if (!this.isConnected || this.isGenerating) return;
+                
+                this.isGenerating = true;
+                this.ws.send(JSON.stringify({
+                    type: 'chat',
+                    content: message
+                }));
+            }
+
+            stop() {
+                if (!this.isConnected || !this.isGenerating) return;
+                
+                this.ws.send(JSON.stringify({ type: 'stop' }));
+            }
+
+            setStatus(status, message) {
+                const indicator = document.getElementById('status-indicator');
+                indicator.className = `status-indicator ${status}`;
+                indicator.textContent = message;
+            }
+        }
+
+        class ChatUI {
+            constructor() {
+                this.client = new WebUIClient();
+                this.isStreaming = false;
+                this.currentMessageElement = null;
+                this.currentToolElements = {};
+                this.currentToolAccumulator = {};
+                
+                this.setupEventHandlers();
+                this.init();
+            }
+
+            init() {
+                // Setup client event handlers
+                this.client.onMessage = (content) => {
+                    this.appendToMessage(content);
+                };
+
+                this.client.onToolCall = (data, isOutput = false) => {
+                    if (isOutput) {
+                        this.handleToolOutput(data);
+                    } else {
+                        this.handleToolCall(data);
+                    }
+                };
+
+                this.client.onDone = () => {
+                    this.endStreaming();
+                };
+
+                this.client.onError = (error) => {
+                    this.showError(error);
+                    this.endStreaming();
+                };
+
+                // Connect to WebSocket
+                this.client.connect();
+
+                // Setup file browser (simplified version)
+                this.setupFileBrowser();
+                this.setupSettings();
+            }
+
+            setupEventHandlers() {
+                const input = document.getElementById('message-input');
+                input.addEventListener('input', this.autoResize.bind(this));
+                
+                // Send button
+                document.getElementById('send-button').addEventListener('click', () => {
+                    this.sendMessage();
+                });
+
+                // Stop button  
+                document.getElementById('stop-button').addEventListener('click', () => {
+                    this.stopGeneration();
+                });
+            }
+
+            autoResize() {
+                const textarea = document.getElementById('message-input');
+                textarea.style.height = 'auto';
+                textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+            }
+
+            sendMessage() {
+                const input = document.getElementById('message-input');
+                const message = input.value.trim();
+                
+                if (!message || this.isStreaming) return;
+
+                // Clear input
+                input.value = '';
+                this.autoResize();
+
+                // Add user message to chat
+                this.addUserMessage(message);
+
+                // Start assistant message
+                this.startAssistantMessage();
+
+                // Send to server
+                this.startStreaming();
+                this.client.sendChat(message);
+            }
+
+            stopGeneration() {
+                this.client.stop();
+            }
+
+            addUserMessage(content) {
+                const chatArea = document.getElementById('chat-area');
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message user';
+                messageDiv.innerHTML = `
+                    <div class="message-content">${this.escapeHtml(content)}</div>
+                `;
+                chatArea.appendChild(messageDiv);
+                chatArea.scrollTop = chatArea.scrollHeight;
+            }
+
+            startAssistantMessage() {
+                const chatArea = document.getElementById('chat-area');
+                this.currentMessageElement = document.createElement('div');
+                this.currentMessageElement.className = 'message assistant';
+                this.currentMessageElement.innerHTML = '<div class="message-content"></div>';
+                chatArea.appendChild(this.currentMessageElement);
+                chatArea.scrollTop = chatArea.scrollHeight;
+            }
+
+            appendToMessage(content) {
+                if (!this.currentMessageElement) return;
+                
+                const contentDiv = this.currentMessageElement.querySelector('.message-content');
+                contentDiv.textContent += content;
+                this.currentMessageElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+
+            handleToolCall(data) {
+                if (!this.currentMessageElement) return;
+
+                const toolKey = data.name + '_' + (data.index || 0);
+                this.currentToolElements[toolKey] = this.createToolElement(data);
+                
+                const contentDiv = this.currentMessageElement.querySelector('.message-content');
+                contentDiv.appendChild(this.currentToolElements[toolKey]);
+                this.currentMessageElement.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+
+            handleToolOutput(data) {
+                const toolKey = data.name + '_' + (data.index || 0);
+                const toolElement = this.currentToolElements[toolKey];
+                
+                if (toolElement) {
+                    const contentDiv = toolElement.querySelector('.tool-content');
+                    contentDiv.textContent = this.formatToolOutput(data);
+                    contentDiv.classList.remove('collapsed');
+                }
+            }
+
+            createToolElement(data) {
+                const toolDiv = document.createElement('div');
+                const toolType = this.getToolType(data.name);
+                toolDiv.className = `tool-call ${toolType}`;
+                
+                const header = document.createElement('div');
+                header.className = 'tool-header';
+                header.innerHTML = `
+                    <span>${data.name}</span>
+                    <span class="tool-trigger">${JSON.stringify(data.arguments).substring(0, 50)}...</span>
+                    <span class="tool-toggle">▶</span>
+                `;
+
+                const content = document.createElement('div');
+                content.className = 'tool-content collapsed';
+                content.innerHTML = '<div class="loading"></div>';
+
+                header.addEventListener('click', () => {
+                    content.classList.toggle('collapsed');
+                    const toggle = header.querySelector('.tool-toggle');
+                    toggle.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
+                });
+
+                toolDiv.appendChild(header);
+                toolDiv.appendChild(content);
+                
+                return toolDiv;
+            }
+
+            formatToolOutput(data) {
+                let output = '';
+                if (data.output) output += `输出:\n${data.output}\n\n`;
+                if (data.error) output += `错误:\n${data.error}\n\n`;
+                if (data.status) output += `状态: ${data.status}`;
+                return output.trim();
+            }
+
+            getToolType(name) {
+                if (name.includes('bash') || name.includes('command')) return 'bash';
+                if (name.includes('file') || name.includes('read') || name.includes('write')) return 'file';
+                if (name.includes('web') || name.includes('http')) return 'web';
+                return 'other';
+            }
+
+            startStreaming() {
+                this.isStreaming = true;
+                document.getElementById('send-button').classList.add('hidden');
+                document.getElementById('stop-button').classList.remove('hidden');
+                document.getElementById('message-input').disabled = true;
+            }
+
+            endStreaming() {
+                this.isStreaming = false;
+                document.getElementById('send-button').classList.remove('hidden');
+                document.getElementById('stop-button').classList.add('hidden');
+                document.getElementById('message-input').disabled = false;
+                this.currentMessageElement = null;
+                this.currentToolElements = {};
+                this.currentToolAccumulator = {};
+            }
+
+            showError(error) {
+                const chatArea = document.getElementById('chat-area');
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'message assistant';
+                errorDiv.innerHTML = `
+                    <div class="message-content" style="color: var(--danger);">
+                        ❌ 错误: ${this.escapeHtml(error)}
+                    </div>
+                `;
+                chatArea.appendChild(errorDiv);
+                chatArea.scrollTop = chatArea.scrollHeight;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            setupFileBrowser() {
+                // Simplified file browser - would need server API integration
+                console.log('File browser setup (needs API integration)');
+            }
+
+            setupSettings() {
+                // Simplified settings - would need server API integration  
+                console.log('Settings setup (needs API integration)');
+            }
+        }
+
+        // Global functions for UI interactions
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('collapsed');
+        }
+
+        function newChat() {
+            // Implementation for starting a new chat
+            window.location.reload();
+        }
+
+        function showFileBrowser() {
+            alert('文件浏览器功能开发中...');
+        }
+
+        function showSettings() {
+            alert('设置功能开发中...');
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            if (body.classList.contains('dark-theme')) {
+                body.classList.remove('dark-theme');
+                body.classList.add('light-theme');
+            } else {
+                body.classList.remove('light-theme');
+                body.classList.add('dark-theme');
+            }
+        }
+
+        function handleKeydown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                chatUI.sendMessage();
+            }
+        }
+
+        // Global send/stop functions
+        function sendMessage() {
+            chatUI.sendMessage();
+        }
+
+        function stopGeneration() {
+            chatUI.stopGeneration();
+        }
+
+        // Initialize the chat UI when page loads
+        let chatUI;
+        document.addEventListener('DOMContentLoaded', () => {
+            chatUI = new ChatUI();
+        });
+    </script>
+</body>
+</html>

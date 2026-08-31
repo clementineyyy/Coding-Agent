@@ -127,6 +127,44 @@ class OpenAILLM(LLM):
         usage = {"approx_tokens": self._approx_tokens(text, tool_calls)}
         return LLMResult(text=text, tool_calls=tool_calls, usage=usage)
 
+    def complete_stream(self, messages: list[dict], tools: list[dict]):
+        """Streaming version of complete() that yields events."""
+        stream = self._create_stream(messages, tools)
+        text_parts: list[str] = []
+        tool_acc: dict[int, dict] = {}
+        try:
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    text_parts.append(delta.content)
+                    yield ("token", {"content": delta.content})
+                if delta and delta.tool_calls:
+                    for call in delta.tool_calls:
+                        slot = tool_acc.setdefault(call.index, {"name": "", "arguments": ""})
+                        if call.function and call.function.name:
+                            slot["name"] += call.function.name
+                        if call.function and call.function.arguments:
+                            slot["arguments"] += call.function.arguments
+                        yield ("tool_call_delta", {"index": call.index, "name": slot["name"], "arguments": slot["arguments"]})
+        except openai.APIConnectionError as exc:
+            raise LLMNetworkError(str(exc)) from exc
+        except httpx.TransportError as exc:
+            raise LLMNetworkError(str(exc)) from exc
+
+        text = "".join(text_parts)
+        tool_calls: list[dict] = []
+        for index in sorted(tool_acc):
+            slot = tool_acc[index]
+            try:
+                arguments = json.loads(slot["arguments"] or "{}")
+            except json.JSONDecodeError:
+                arguments = {}
+            tool_calls.append({"name": slot["name"], "arguments": arguments})
+        usage = {"approx_tokens": self._approx_tokens(text, tool_calls)}
+        yield ("done", {"text": text, "tool_calls": tool_calls, "usage": usage})
+
     def _approx_tokens(self, text: str, tool_calls: list[dict]) -> int:
         chars = len(text)
         for call in tool_calls:
