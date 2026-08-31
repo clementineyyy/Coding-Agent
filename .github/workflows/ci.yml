@@ -13,7 +13,13 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -e ".[dev]"
-      - run: pytest harness/tests -q
+      - run: pytest harness/tests/test_llm.py -q
+      - run: pytest harness/tests/test_agent_core.py -q
+      - run: pytest harness/tests/test_agent_context.py -q
+      - run: pytest harness/tests/test_agent_feedback.py -q
+      - run: pytest harness/tests/test_agent_end.py -q
+      - run: pytest harness/tests/test_task_executor.py -q
+      - run: pytest harness/tests/webui/ -q
 
   build:
     needs: test

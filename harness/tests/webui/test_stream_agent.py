@@ -4,9 +4,13 @@ from harness.webui.stream_agent import StreamAgent
 
 
 @pytest.mark.asyncio
-async def test_stream_agent_echo(tmp_path):
+async def test_stream_agent_echo():
     """使用 FakeLLM 验证 StreamAgent 能流式推送事件。"""
-    cfg = Config(workspace=tmp_path, tool_timeout=5)
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        import pathlib
+        tmp_path = pathlib.Path(tmpdir)
+        cfg = Config(workspace=tmp_path, tool_timeout=5)
     agent = StreamAgent(cfg)
     # Override agent with FakeLLM-driven one for testing
     from harness.fake_llm import FakeLLM, FakeTurn
