@@ -33,6 +33,8 @@ def default_rules() -> list[Rule]:
         Rule(r"bash:.*:\(\)\s*\{.*:.*\};", "deny", "builtin"),
         Rule(r"bash:format.*", "deny", "builtin"),
         Rule(r"bash:del /f.*", "deny", "builtin"),
+        Rule(r"bash:curl.*", "ask", "builtin"),
+        Rule(r"bash:wget.*", "ask", "builtin"),
     ]
 
 
