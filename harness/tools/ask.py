@@ -6,7 +6,18 @@ from typing import TYPE_CHECKING, Any, Callable
 if TYPE_CHECKING:
     from harness.registry import Context
 
-SCHEMA: dict = {"question": "string", "options": "array[string]"}
+SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "question": {"type": "string", "description": "问题内容"},
+        "options": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "选项列表（可选）",
+        },
+    },
+    "required": ["question"],
+}
 
 
 @dataclass
