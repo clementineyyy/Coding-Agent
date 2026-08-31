@@ -8,6 +8,7 @@ from pathlib import Path
 
 _ENV_BASE_URL = "DEEPSEEK_BASE_URL"
 _ENV_MODEL = "DEEPSEEK_MODEL"
+_ENV_SANDBOX = "SANDBOX_BACKEND"
 
 
 def _read_env_file(path: str) -> dict[str, str]:
@@ -48,11 +49,13 @@ class Config:
     def load(cls, path: Path | None = None, env_file: str = ".env") -> Config:
         cfg = cls()
         env = _read_env_file(env_file)
-        env.update({k: v for k, v in os.environ.items() if k in (_ENV_BASE_URL, _ENV_MODEL) and v})
+        env.update({k: v for k, v in os.environ.items() if k in (_ENV_BASE_URL, _ENV_MODEL, _ENV_SANDBOX) and v})
         if env.get(_ENV_BASE_URL):
             cfg.base_url = env[_ENV_BASE_URL].rstrip("/")
         if env.get(_ENV_MODEL):
             cfg.model = env[_ENV_MODEL]
+        if env.get(_ENV_SANDBOX):
+            cfg.sandbox_backend = env[_ENV_SANDBOX]
         if path is None:
             return cfg
         path = Path(path)
