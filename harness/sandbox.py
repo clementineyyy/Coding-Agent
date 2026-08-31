@@ -103,7 +103,7 @@ class DockerSandbox(Sandbox):
                 "docker CLI not found on PATH; install Docker or fall back to LocalSandbox"
             )
         cidfile = os.path.join(tempfile.gettempdir(), f"harness-cid-{uuid.uuid4().hex}.txt")
-        argv = [docker, "run", "--rm"]
+        argv = [docker, "run", "--rm", "-w", "/workspace"]
         if not self.network_enabled:
             argv.append("--network=none")
         argv += [
