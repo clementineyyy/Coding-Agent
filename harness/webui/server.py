@@ -115,7 +115,10 @@ async def websocket_endpoint(websocket: WebSocket):
             if msg.get("type") == "chat":
                 async def push(event: dict):
                     await websocket.send_text(json.dumps(event, ensure_ascii=False))
-                await agent.chat(msg["content"], push)
+                try:
+                    await agent.chat(msg["content"], push)
+                except Exception as e:
+                    await push({"type": "error", "content": str(e)})
             elif msg.get("type") == "stop":
                 await agent.stop()
     except WebSocketDisconnect:
