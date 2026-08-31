@@ -198,9 +198,10 @@
         }
 
         .tool-call {
-            margin-top: 12px;
+            margin-top: 8px;
+            border: 1px solid var(--border);
             border-left: 3px solid;
-            border-radius: 4px;
+            border-radius: 6px;
             overflow: hidden;
             background-color: var(--card);
         }
@@ -211,25 +212,42 @@
         .tool-call.other { border-color: var(--text-muted); }
 
         .tool-header {
-            padding: 8px 12px;
+            padding: 6px 10px;
             background-color: var(--sidebar);
             cursor: pointer;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            gap: 8px;
             font-weight: 500;
+            font-size: 13px;
+            user-select: none;
+        }
+
+        .tool-name {
+            font-weight: 600;
+            white-space: nowrap;
         }
 
         .tool-trigger {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            opacity: 0.8;
+            font-size: 12px;
+            color: var(--text-muted);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .tool-toggle {
+            font-size: 10px;
+            color: var(--text-muted);
+            flex-shrink: 0;
         }
 
         .tool-content {
-            padding: 14px;
+            padding: 10px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
+            font-size: 12px;
             line-height: 1.5;
             white-space: pre-wrap;
             background-color: var(--bg);
@@ -238,6 +256,22 @@
 
         .tool-content.collapsed {
             display: none;
+        }
+
+        .tool-result {
+            padding: 4px 10px 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border-top: 1px solid var(--border);
+            display: none;
+        }
+
+        .tool-call.completed .tool-result {
+            display: block;
         }
 
         /* Input area */
@@ -638,11 +672,18 @@
             handleToolOutput(data) {
                 const toolKey = data.name + '_' + (data.index || 0);
                 const toolElement = this.currentToolElements[toolKey];
-                
+
                 if (toolElement) {
                     const contentDiv = toolElement.querySelector('.tool-content');
                     contentDiv.textContent = this.formatToolOutput(data);
-                    contentDiv.classList.remove('collapsed');
+                    contentDiv.classList.add('collapsed');
+
+                    const resultDiv = toolElement.querySelector('.tool-result');
+                    const output = this.formatToolOutput(data);
+                    const firstLine = output.split('\n')[0];
+                    resultDiv.textContent = firstLine.length > 80 ? firstLine.substring(0, 80) + '...' : firstLine;
+
+                    toolElement.classList.add('completed');
                 }
             }
 
@@ -650,18 +691,23 @@
                 const toolDiv = document.createElement('div');
                 const toolType = this.getToolType(data.name);
                 toolDiv.className = `tool-call ${toolType}`;
+
+                const args = typeof data.arguments === 'object' ? JSON.stringify(data.arguments) : String(data.arguments || '');
                 
                 const header = document.createElement('div');
                 header.className = 'tool-header';
                 header.innerHTML = `
-                    <span>${data.name}</span>
-                    <span class="tool-trigger">${JSON.stringify(data.arguments).substring(0, 50)}...</span>
+                    <span class="tool-name">${data.name}</span>
+                    <span class="tool-trigger" title="${this.escapeHtml(args)}">${this.escapeHtml(args)}</span>
                     <span class="tool-toggle">▶</span>
                 `;
 
                 const content = document.createElement('div');
                 content.className = 'tool-content collapsed';
                 content.innerHTML = '<div class="loading"></div>';
+
+                const result = document.createElement('div');
+                result.className = 'tool-result';
 
                 header.addEventListener('click', () => {
                     content.classList.toggle('collapsed');
@@ -670,8 +716,9 @@
                 });
 
                 toolDiv.appendChild(header);
+                toolDiv.appendChild(result);
                 toolDiv.appendChild(content);
-                
+
                 return toolDiv;
             }
 
