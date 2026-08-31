@@ -510,6 +510,8 @@
                     if (this.onToolCall) this.onToolCall(data);
                 } else if (data.type === 'tool_output') {
                     if (this.onToolCall) this.onToolCall(data, true);
+                } else if (data.type === 'ask') {
+                    if (this.onAsk) this.onAsk(data);
                 } else if (data.type === 'done') {
                     this.isGenerating = false;
                     if (this.onDone) this.onDone();
@@ -565,6 +567,10 @@
                     } else {
                         this.handleToolCall(data);
                     }
+                };
+
+                this.client.onAsk = (data) => {
+                    this.showAskDialog(data);
                 };
 
                 this.client.onDone = () => {
@@ -765,6 +771,35 @@
                 `;
                 chatArea.appendChild(errorDiv);
                 chatArea.scrollTop = chatArea.scrollHeight;
+            }
+
+            showAskDialog(data) {
+                const overlay = document.getElementById('ask-overlay');
+                const question = document.getElementById('ask-question');
+                const buttons = document.getElementById('ask-buttons');
+                question.textContent = data.question || '是否允许执行该操作？';
+                buttons.innerHTML = '';
+                const options = data.options || ['y', 'n', 'always_allow', 'never_allow'];
+                const labels = {
+                    'y': '✅ 允许本次',
+                    'n': '❌ 拒绝本次',
+                    'always_allow': '🔄 始终允许',
+                    'never_allow': '🚫 始终拒绝'
+                };
+                options.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = 'ask-button';
+                    btn.textContent = labels[opt] || opt;
+                    btn.onclick = () => {
+                        overlay.classList.add('hidden');
+                        this.client.ws.send(JSON.stringify({
+                            type: 'ask_response',
+                            answer: opt
+                        }));
+                    };
+                    buttons.appendChild(btn);
+                });
+                overlay.classList.remove('hidden');
             }
 
             escapeHtml(text) {

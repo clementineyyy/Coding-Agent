@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import Any, Callable, Coroutine
 
 from harness.agent import Agent
@@ -30,6 +31,10 @@ class StreamAgent:
 
     def __init__(self, config: Config):
         self.config = config
+        self._ask_event: threading.Event | None = None
+        self._ask_answer: str = ""
+        self._push: Callable[[dict], Coroutine[Any, Any, None]] | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
         self.agent = self._make_agent(config)
 
     def _make_agent(self, config: Config) -> Agent:
@@ -69,9 +74,27 @@ class StreamAgent:
             pass
         return Agent(
             llm, registry, sandbox, hooks, policy, state, memory, config,
-            ask_callback=None,
+            ask_callback=self._ask_callback,
             on_text=None,
         )
+
+    def _ask_callback(self, question: str, options: list[str]) -> str:
+        """从线程池中调用：发送 ask 事件给前端，阻塞等待响应。"""
+        self._ask_event = threading.Event()
+        self._ask_answer = ""
+        if self._loop is not None and self._push is not None:
+            asyncio.run_coroutine_threadsafe(
+                self._push({"type": "ask", "question": question, "options": options}),
+                self._loop,
+            )
+        self._ask_event.wait(timeout=300)
+        return self._ask_answer or "n"
+
+    def handle_ask_response(self, answer: str) -> None:
+        """由 WebSocket 消息处理器调用，释放 ask_callback 的阻塞。"""
+        self._ask_answer = answer
+        if self._ask_event is not None:
+            self._ask_event.set()
 
     def _build_sandbox(self, config: Config):
         if config.sandbox_backend == "docker":
@@ -107,12 +130,13 @@ class StreamAgent:
 
     async def chat(self, message: str, push: Callable[[dict], Coroutine[Any, Any, None]]):
         """处理用户消息，通过 push 协程逐条推送事件。"""
-        loop = asyncio.get_running_loop()
+        self._loop = asyncio.get_running_loop()
+        self._push = push
 
         def on_event(event_type: str, data: dict):
             try:
                 asyncio.run_coroutine_threadsafe(
-                    push({"type": event_type, **data}), loop
+                    push({"type": event_type, **data}), self._loop
                 )
             except Exception:
                 pass

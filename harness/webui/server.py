@@ -119,6 +119,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     await agent.chat(msg["content"], push)
                 except Exception as e:
                     await push({"type": "error", "content": str(e)})
+            elif msg.get("type") == "ask_response":
+                agent.handle_ask_response(msg.get("answer", "n"))
             elif msg.get("type") == "stop":
                 await agent.stop()
     except WebSocketDisconnect:
