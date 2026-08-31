@@ -348,12 +348,12 @@ class Agent:
             for i, call in enumerate(response.tool_calls):
                 tool_id = f"call_{call_uid - len(response.tool_calls) + i}"
                 if on_event:
-                    on_event("tool_call", {"name": call["name"], "arguments": call["arguments"]})
+                    on_event("tool_call", {"name": call["name"], "arguments": call["arguments"], "index": i})
                 tool_result = self.pipeline(call, self.context_for_tool())
                 result.tool_results.append(tool_result)
                 self._tool_calls.append({"name": call["name"], "arguments": call["arguments"]})
                 if on_event:
-                    on_event("tool_output", {"name": call["name"], "output": tool_result.output, "error": tool_result.error, "status": tool_result.status})
+                    on_event("tool_output", {"name": call["name"], "output": tool_result.output, "error": tool_result.error, "status": tool_result.status, "index": i})
                 self.messages.append({
                     "role": "tool",
                     "tool_call_id": tool_id,

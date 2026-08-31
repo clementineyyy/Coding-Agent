@@ -111,6 +111,12 @@ class OpenAILLM(LLM):
             raise LLMNetworkError(str(exc)) from exc
         except httpx.TransportError as exc:
             raise LLMNetworkError(str(exc)) from exc
+        except openai.BadRequestError as exc:
+            return LLMResult(
+                text=f"API 请求错误: {exc}",
+                tool_calls=[],
+                usage={"approx_tokens": 0},
+            )
 
         text = "".join(text_parts)
         tool_calls: list[dict] = []
