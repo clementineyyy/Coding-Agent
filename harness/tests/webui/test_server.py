@@ -19,6 +19,7 @@ async def test_server_health():
     print('Server health endpoint test: PASS')
     
 
+@pytest.mark.asyncio
 async def test_config_loading():
     """测试配置加载功能。"""
     from harness.config import Config

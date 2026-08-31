@@ -121,7 +121,7 @@ def test_chat_preserves_context(tmp_path):
     # Use chat() twice
     r1 = a.chat("第一条消息")
     assert "第一次回复" in r1.text
-    assert len(a.messages) >= 4  # system + user1 + asst1 (+ maybe extra)
+    assert len(a.messages) >= 3  # system + user1 + asst1
     r2 = a.chat("第二条消息")
     assert "第二次回复" in r2.text
     # Verify context was preserved: messages should include both rounds

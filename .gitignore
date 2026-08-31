@@ -8,3 +8,11 @@ __pycache__/
 *.pyc
 .venv/
 *.egg-info/
+_check_*.py
+ci_*.json
+pub_*.json
+pypi_*.json
+env_*.json
+pub_logs.txt
+releases*.json
+envs.json
