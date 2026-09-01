@@ -107,10 +107,7 @@ class Agent:
     def pipeline(self, call: dict, ctx: Context, on_event: Callable[[str, dict], None] | None = None) -> ToolResult:
         name = call["name"]
         args = call["arguments"]
-        import sys
-        print(f"[DEBUG] pipeline: name={name}, on_event={on_event is not None}", flush=True)
         verdict = evaluate(self.policy.rules, name, args)
-        print(f"[DEBUG] pipeline: verdict={verdict.action}, matched={verdict.matched_rule}", flush=True)
         if verdict.action == "deny":
             if on_event:
                 on_event("tool_call", {"name": name, "arguments": args, "index": 0})
@@ -118,9 +115,7 @@ class Agent:
             return ToolResult(status="error", error=f"guardrail denied: {verdict.reason}")
         if verdict.action == "ask":
             self.state.fire("approval_needed", "guardrail")
-            print(f"[DEBUG] pipeline: calling _ask...", flush=True)
             answer = self._ask(verdict.matched_rule, verdict.reason)
-            print(f"[DEBUG] pipeline: _ask returned answer={answer}", flush=True)
             self.policy.apply_answer(verdict.matched_rule, answer)
             if self.state.state == "awaiting_user":
                 self.state.fire("user_answered", "user")
@@ -130,9 +125,7 @@ class Agent:
                     on_event("tool_output", {"name": name, "error": f"guardrail denied: {verdict.reason}", "status": "error", "index": 0})
                 return ToolResult(status="error", error=f"guardrail denied: {verdict.reason}")
         if on_event:
-            print(f"[DEBUG] pipeline: emitting tool_call event", flush=True)
             on_event("tool_call", {"name": name, "arguments": args, "index": 0})
-        if self.state.state == "awaiting_user":
         if self.state.state == "awaiting_user":
             self.state.fire("user_answered", "user")
         args, ok = self.hooks.pre_tool_use(name, args)
@@ -163,17 +156,12 @@ class Agent:
             self.on_text(text)
 
     def _ask(self, rule, reason: str) -> str:
-        import sys
         question = f"是否允许执行该操作？\n规则: {rule.pattern}\n原因: {reason}"
         if self.ask_callback is None:
-            print(f"[DEBUG] _ask: no ask_callback, returning n", flush=True)
             return "n"
         try:
-            print(f"[DEBUG] _ask: calling ask_callback...", flush=True)
             answer = self.ask_callback(question, list(_ASK_OPTIONS))
-            print(f"[DEBUG] _ask: ask_callback returned {answer}", flush=True)
-        except Exception as e:
-            print(f"[DEBUG] _ask: ask_callback exception: {e}", flush=True)
+        except Exception:
             return "n"
         if answer not in _ASK_OPTIONS:
             return "n"

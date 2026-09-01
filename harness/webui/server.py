@@ -108,6 +108,7 @@ async def websocket_endpoint(websocket: WebSocket):
     agent = StreamAgent(config)
     session_id = id(agent)
     _sessions[session_id] = agent
+    chat_task = None
     try:
         while True:
             data = await websocket.receive_text()
@@ -115,15 +116,28 @@ async def websocket_endpoint(websocket: WebSocket):
             if msg.get("type") == "chat":
                 async def push(event: dict):
                     await websocket.send_text(json.dumps(event, ensure_ascii=False))
-                try:
-                    await agent.chat(msg["content"], push)
-                except Exception as e:
-                    await push({"type": "error", "content": str(e)})
+                if chat_task and not chat_task.done():
+                    chat_task.cancel()
+                async def run_chat():
+                    try:
+                        await agent.chat(msg["content"], push)
+                    except asyncio.CancelledError:
+                        pass
+                    except BaseException as e:
+                        try:
+                            await push({"type": "error", "content": str(e)})
+                        except Exception:
+                            pass
+                chat_task = asyncio.create_task(run_chat())
             elif msg.get("type") == "ask_response":
                 agent.handle_ask_response(msg.get("answer", "n"))
             elif msg.get("type") == "stop":
+                if chat_task and not chat_task.done():
+                    chat_task.cancel()
                 await agent.stop()
     except WebSocketDisconnect:
         pass
     finally:
+        if chat_task and not chat_task.done():
+            chat_task.cancel()
         _sessions.pop(session_id, None)

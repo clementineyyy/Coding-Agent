@@ -80,25 +80,21 @@ class StreamAgent:
 
     def _ask_callback(self, question: str, options: list[str]) -> str:
         """从线程池中调用：发送 ask 事件给前端，阻塞等待响应。"""
-        import sys
-        print("[DEBUG] _ask_callback called", flush=True)
         self._ask_event = threading.Event()
         self._ask_answer = ""
         if self._loop is not None and self._push is not None:
-            print("[DEBUG] _ask_callback: sending ask event", flush=True)
-            asyncio.run_coroutine_threadsafe(
-                self._push({"type": "ask", "question": question, "options": options}),
-                self._loop,
-            )
-        print("[DEBUG] _ask_callback: waiting for event...", flush=True)
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self._push({"type": "ask", "question": question, "options": options}),
+                    self._loop,
+                )
+            except BaseException:
+                pass
         self._ask_event.wait(timeout=300)
-        print(f"[DEBUG] _ask_callback: event triggered, answer={self._ask_answer}", flush=True)
         return self._ask_answer or "n"
 
     def handle_ask_response(self, answer: str) -> None:
         """由 WebSocket 消息处理器调用，释放 ask_callback 的阻塞。"""
-        import sys
-        print(f"[DEBUG] handle_ask_response called with answer={answer}", flush=True)
         self._ask_answer = answer
         if self._ask_event is not None:
             self._ask_event.set()
@@ -141,15 +137,11 @@ class StreamAgent:
         self._push = push
 
         def on_event(event_type: str, data: dict):
-            import sys
-            print(f"[DEBUG] on_event: type={event_type}, data_keys={list(data.keys())}", flush=True)
             try:
                 asyncio.run_coroutine_threadsafe(
                     push({"type": event_type, **data}), self._loop
                 )
-                print(f"[DEBUG] on_event: scheduled {event_type} on loop", flush=True)
-            except Exception as e:
-                print(f"[DEBUG] on_event ERROR: {e}", flush=True)
+            except BaseException:
                 pass
 
         result = await asyncio.to_thread(self.agent.chat, message, on_event=on_event)
