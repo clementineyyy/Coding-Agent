@@ -89,6 +89,7 @@ class Agent:
         self.warnings: list[str] = []
         self._tool_calls: list[dict] = []
         self.messages: list[dict] = []
+        self.feedback_loop = None
 
     def context_for_tool(self) -> Context:
         return Context(
@@ -366,6 +367,10 @@ class Agent:
                     "name": call["name"],
                     "content": json.dumps(self._result_to_dict(tool_result), ensure_ascii=False),
                 })
+                if self.feedback_loop:
+                    extra = self.feedback_loop.after_tool(call["name"], call["arguments"], tool_result)
+                    if extra:
+                        self.messages.extend(extra)
                 norm = self._result_to_dict(tool_result)
                 failed = norm.get("status") != "success" or bool(norm.get("error"))
                 if failed:
